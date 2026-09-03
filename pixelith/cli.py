@@ -13,6 +13,7 @@ from pathlib import Path
 from . import __version__, license_info
 from .config import MODELS, OUTPUT_DIR, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import Cancelled, Engine, available_providers, choose_providers
+from . import licensing, watermark
 from .models import ensure, status as model_status
 from .pipeline import estimate_seconds, human_time, plan, upscale_image
 from .video import VideoError, have_ffmpeg, probe, upscale_video
@@ -104,9 +105,14 @@ def cmd_license(args: argparse.Namespace) -> int:
     print("Charities, schools, universities and public bodies count as personal")
     print("use, however they are funded.")
     print()
-    print("Pixelith does not measure or enforce any of this. There is no key")
-    print("check, no metering and no telemetry - it runs entirely on your")
-    print("machine. The limits rest on your honesty, deliberately.")
+    print("The allowance is measured on this machine, and Pixelith stops when")
+    print("you reach it. Licence keys are verified offline. Nothing is ever")
+    print("sent to us: no telemetry, no usage reports, no activation server.")
+    print()
+    print("Free-tier output carries an invisible provenance mark identifying")
+    print("the tier and installation. It holds no personal information and is")
+    print("never transmitted. A paid licence removes it. Read one back with")
+    print("'pixelith verify <file>'.")
     print()
     print(f"  Full terms       {lic['url']}")
     print(f"  Buy a licence    {lic['commercial_contact']}")
@@ -115,6 +121,90 @@ def cmd_license(args: argparse.Namespace) -> int:
     print("licence and are not covered by these terms; see NOTICE.md.")
     print(f"Versions 0.1.x were released under {lic['prior_license'].split(' (')[0]}")
     print("and keep those rights.")
+    return 0
+
+
+def _fmt_bytes(n: int) -> str:
+    if n >= 1024**3:
+        return f"{n / 1024**3:.2f} GB"
+    if n >= 1024**2:
+        return f"{n / 1024**2:.0f} MB"
+    return f"{n / 1024:.0f} KB"
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    st = licensing.allowance_status()
+    if st["licensed"]:
+        holder = st["holder"] or "unnamed"
+        print(f"Licensed: {st['tier']} - {holder}")
+        print("  images   unlimited")
+        print("  video    unlimited")
+        print("  output   no watermark")
+    else:
+        print("Free tier")
+        print(f"  images   {st['images_used']} of {st['images_limit']} used, "
+              f"{st['images_remaining']} left")
+        print(f"  video    {_fmt_bytes(st['video_bytes_used'])} of "
+              f"{_fmt_bytes(st['video_bytes_limit'])} used, "
+              f"{_fmt_bytes(st['video_bytes_remaining'])} left")
+        print("  output   carries an invisible provenance mark")
+        print()
+        print("  A licence removes both limits and the mark, permanently:")
+        print("    $10   personal, one person, all their devices")
+        print("    $200  commercial, one company")
+        from . import COMMERCIAL_CONTACT
+        print(f"    Buy one at {COMMERCIAL_CONTACT}, then run "
+              f"'pixelith activate <key>'")
+    if st["tampered"]:
+        print()
+        print("  Note: the usage record does not match its checksum. It has been")
+        print("  edited or corrupted. Counting continues from what is there.")
+    print(f"\n  install {st['install_id']}")
+    return 0
+
+
+def cmd_activate(args: argparse.Namespace) -> int:
+    try:
+        claims = licensing.activate(args.key)
+    except licensing.LicenceError as exc:
+        print(f"Could not activate: {exc}", file=sys.stderr)
+        return 1
+    print(f"Activated: {claims['tier']} licence for {claims.get('holder','')}")
+    print("Limits removed, and output is no longer watermarked. Thank you.")
+    return 0
+
+
+def cmd_deactivate(args: argparse.Namespace) -> int:
+    if licensing.deactivate():
+        print("Licence removed from this machine. Back to the free tier.")
+        return 0
+    print("No licence was active on this machine.")
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Read the provenance mark out of an image."""
+    import numpy as np
+    from PIL import Image
+
+    path = Path(args.file).expanduser()
+    if not path.exists():
+        print(f"no such file: {path}", file=sys.stderr)
+        return 2
+    with Image.open(path) as im:
+        found = watermark.extract(np.asarray(im.convert("RGB")))
+    if not found:
+        print(f"{path.name}: no Pixelith mark found.")
+        print("  Either it was not made by Pixelith, it was made under a paid")
+        print("  licence, or the mark did not survive later editing.")
+        return 1
+    print(f"{path.name}: Pixelith mark found")
+    print(f"  tier      {found['tier_name']}")
+    print(f"  install   {found['install_id']}")
+    print(f"  sequence  {found['sequence']}")
+    if found["tier_name"] == "free":
+        print("\n  This file was produced under the free tier, which does not")
+        print("  permit commercial use.")
     return 0
 
 
@@ -191,6 +281,13 @@ def cmd_upscale(args: argparse.Namespace) -> int:
             print("  aborted")
             return 1
 
+    try:
+        licensing.check_allowance("video" if is_video else "image",
+                                  video_bytes=src.stat().st_size if is_video else 0)
+    except licensing.AllowanceExceeded as exc:
+        print(f"\n  {exc}", file=sys.stderr)
+        return 3
+
     engine = Engine(spec, settings)
     print(f"  running on {engine.provider}")
     started = time.time()
@@ -228,6 +325,9 @@ def cmd_upscale(args: argparse.Namespace) -> int:
     except Cancelled:
         print("\n  cancelled")
         return 1
+    except licensing.AllowanceExceeded as exc:
+        print(f"\n\n  {exc}", file=sys.stderr)
+        return 3
     except (VideoError, ValueError) as exc:
         print(f"\n  failed: {exc}", file=sys.stderr)
         return 1
@@ -272,8 +372,22 @@ def build_parser() -> argparse.ArgumentParser:
     i = sub.add_parser("info", help="show models, providers and paths")
     i.set_defaults(func=cmd_info)
 
-    lic = sub.add_parser("license", help="show the licence and commercial terms")
+    lic = sub.add_parser("license", help="show the licence and pricing")
     lic.set_defaults(func=cmd_license)
+
+    stt = sub.add_parser("status", help="how much of the free allowance is left")
+    stt.set_defaults(func=cmd_status)
+
+    act = sub.add_parser("activate", help="activate a licence key you bought")
+    act.add_argument("key")
+    act.set_defaults(func=cmd_activate)
+
+    dea = sub.add_parser("deactivate", help="remove the licence from this machine")
+    dea.set_defaults(func=cmd_deactivate)
+
+    ver = sub.add_parser("verify", help="read the provenance mark from an image")
+    ver.add_argument("file")
+    ver.set_defaults(func=cmd_verify)
 
     d = sub.add_parser("download", help="pre-download model weights")
     d.add_argument("models", nargs="*", choices=sorted(MODELS) + [])

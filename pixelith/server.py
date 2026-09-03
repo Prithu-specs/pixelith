@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from . import __version__, license_info
 from .config import MODELS, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import available_providers, choose_providers
+from . import licensing
 from .compat import summary as platform_summary
 from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
 from .models import status as model_status
@@ -69,6 +70,7 @@ def health() -> dict:
         },
         "platform": platform_summary(),
         "license": license_info(),
+        "allowance": licensing.allowance_status(),
     }
 
 
@@ -159,6 +161,31 @@ async def create_job(
         dest.unlink(missing_ok=True)
         raise HTTPException(400, "the uploaded file was empty")
 
+    kind = classify(name)
+    try:
+        licensing.check_allowance(
+            kind, video_bytes=size if kind == "video" else 0
+        )
+    except licensing.AllowanceExceeded as exc:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "reason": "allowance_exceeded",
+                "kind": exc.kind,
+                "detail": exc.detail,
+                "message": (
+                    "You have reached the free limit. To carry on, a licence is "
+                    "a one-time payment: $10 for personal use, $200 for "
+                    "commercial use, both for life."
+                ),
+                "personal_usd": 10,
+                "commercial_usd": 200,
+                "contact": license_info()["commercial_contact"],
+                "allowance": licensing.allowance_status(),
+            },
+        ) from exc
+
     settings = UpscaleSettings(
         model=model,
         preset=(preset.lower() if preset else None),
@@ -173,6 +200,31 @@ async def create_job(
         dest.unlink(missing_ok=True)
         raise HTTPException(400, str(exc)) from exc
     return JSONResponse(job.as_dict(), status_code=201)
+
+
+class ActivateRequest(BaseModel):
+    key: str
+
+
+@app.get("/api/allowance")
+def allowance() -> dict:
+    return licensing.allowance_status()
+
+
+@app.post("/api/activate")
+def activate(req: ActivateRequest) -> dict:
+    try:
+        claims = licensing.activate(req.key)
+    except licensing.LicenceError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"activated": True, "claims": claims,
+            "allowance": licensing.allowance_status()}
+
+
+@app.post("/api/deactivate")
+def deactivate() -> dict:
+    return {"removed": licensing.deactivate(),
+            "allowance": licensing.allowance_status()}
 
 
 @app.get("/api/jobs")

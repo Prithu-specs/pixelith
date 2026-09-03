@@ -41,6 +41,18 @@ const el = {
   healthPill:   $('#health-pill'),
   healthText:   $('#health-text'),
   offlineBanner:$('#offline-banner'),
+  allowance:$('#allowance'),
+  allowanceTier:$('#allowance-tier'),
+  allowanceMeters:$('#allowance-meters'),
+  allowanceNote:$('#allowance-note'),
+  allowanceUpgrade:$('#allowance-upgrade'),
+  paywall:$('#paywall'),
+  paywallDetail:$('#paywall-detail'),
+  paywallContact:$('#paywall-contact'),
+  paywallKey:$('#paywall-key'),
+  paywallError:$('#paywall-error'),
+  paywallActivate:$('#paywall-activate'),
+  paywallClose:$('#paywall-close'),
   offlineDetail:$('#offline-detail'),
   retryHealth:  $('#retry-health'),
 
@@ -242,7 +254,11 @@ function setHealth(health) {
  * -------------------------------------------------------------------------- */
 
 class ApiError extends Error {
-  constructor(message, status) { super(message); this.status = status; }
+  constructor(message, status, detail = null) {
+    super(message);
+    this.status = status;
+    this.detail = detail;      // structured bodies (e.g. the 402 paywall)
+  }
 }
 
 function friendlyError(status, detail) {
@@ -272,11 +288,16 @@ async function api(path, options = {}) {
 
   if (!res.ok) {
     let detail = '';
+    let raw = null;
     try {
       const body = await res.json();
       if (body && typeof body.detail === 'string') detail = body.detail;
+      else if (body && body.detail) raw = body.detail;
     } catch { /* non-JSON error body */ }
-    throw new ApiError(friendlyError(res.status, detail), res.status);
+    if (res.status === 402 && raw) {
+      throw new ApiError(raw.message || 'Free limit reached.', 402, raw);
+    }
+    throw new ApiError(friendlyError(res.status, detail), res.status, raw);
   }
   if (res.status === 204) return null;
   try { return await res.json(); } catch { return null; }
@@ -879,6 +900,10 @@ async function submitAll(event) {
       if (i >= 0) staged.splice(i, 1);
       if (job && job.id) { upsertJob(job); watchJob(job); created++; }
     } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        openPaywall(err.detail);
+        break;                 // one prompt is enough; stop queuing the rest
+      }
       failures.push(`${item.file.name}: ${err.message}`);
     }
   }
@@ -949,6 +974,8 @@ function insertCard(node, job) {
 
 /** Create the card on first sight, then patch it in place on every update. */
 function upsertJob(job) {
+  // A finished job consumes allowance; keep the meters honest.
+  if (job && TERMINAL.has(job.status)) loadAllowance();
   let view = jobViews.get(job.id);
   if (!view) {
     const node = el.jobTpl.content.firstElementChild.cloneNode(true);
@@ -1213,6 +1240,120 @@ function stopWatching(id) {
 }
 
 /* -------------------------------------------------------------------------- *
+ * 11b. Free-tier allowance and the paywall
+ * -------------------------------------------------------------------------- */
+
+let allowance = null;
+
+function fmtBytes(n) {
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`;
+  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
+  return `${Math.round(n / 1024)} KB`;
+}
+
+function meter(label, used, limit, fmt) {
+  const pct = limit ? Math.min(100, (used / limit) * 100) : 0;
+  const cls = pct >= 100 ? 'meter meter--full' : pct >= 80 ? 'meter meter--warn' : 'meter';
+  const el = document.createElement('div');
+  el.className = cls;
+  el.innerHTML =
+    `<div class="meter__row"><span>${label}</span>` +
+    `<span>${fmt(used)} of ${fmt(limit)}</span></div>` +
+    `<div class="meter__track"><div class="meter__fill" style="width:${pct}%"></div></div>`;
+  return el;
+}
+
+function renderAllowance() {
+  if (!el.allowance || !allowance) return;
+  el.allowance.hidden = false;
+  const meters = el.allowanceMeters;
+  meters.textContent = '';
+
+  if (allowance.licensed) {
+    setText(el.allowanceTier,
+      `${allowance.tier === 'commercial' ? 'Commercial' : 'Personal'} licence`);
+    el.allowanceUpgrade.hidden = true;
+    setText(el.allowanceNote,
+      (allowance.holder ? `Licensed to ${allowance.holder}. ` : '') +
+      'Unlimited images and video. Output carries no mark.');
+    return;
+  }
+
+  setText(el.allowanceTier, 'Free tier');
+  el.allowanceUpgrade.hidden = false;
+  meters.appendChild(meter('Images', allowance.images_used,
+    allowance.images_limit, (n) => `${n}`));
+  meters.appendChild(meter('Video', allowance.video_bytes_used,
+    allowance.video_bytes_limit, fmtBytes));
+  setText(el.allowanceNote,
+    'Free output carries an invisible provenance mark. A licence removes ' +
+    'the limits and the mark.');
+}
+
+async function loadAllowance() {
+  try {
+    allowance = await api('/allowance');
+    renderAllowance();
+  } catch { /* offline: the banner already says so */ }
+}
+
+function openPaywall(detail) {
+  const dlg = el.paywall;
+  if (!dlg) return;
+  if (detail) {
+    if (detail.allowance) { allowance = detail.allowance; renderAllowance(); }
+    setText(el.paywallDetail, detail.detail
+      ? `${detail.detail}. ${detail.message || ''}`.trim()
+      : (detail.message || ''));
+    if (detail.contact) {
+      el.paywallContact.textContent = detail.contact;
+      el.paywallContact.href = `mailto:${detail.contact}` +
+        '?subject=Pixelith%20licence';
+    }
+  }
+  el.paywallError.hidden = true;
+  el.paywallKey.value = '';
+  if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
+}
+
+async function activateKey() {
+  const key = el.paywallKey.value.trim();
+  if (!key) {
+    setText(el.paywallError, 'Paste the key you were sent.');
+    el.paywallError.hidden = false;
+    return;
+  }
+  el.paywallActivate.disabled = true;
+  try {
+    const res = await api('/activate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    allowance = res.allowance;
+    renderAllowance();
+    el.paywall.close();
+    toast('Licence activated. Limits removed, and output is no longer marked.',
+      'success', 6000);
+  } catch (err) {
+    setText(el.paywallError, err.message || 'That key was not accepted.');
+    el.paywallError.hidden = false;
+  } finally {
+    el.paywallActivate.disabled = false;
+  }
+}
+
+function wirePaywall() {
+  if (!el.paywall) return;
+  el.allowanceUpgrade?.addEventListener('click', () => openPaywall(null));
+  el.paywallActivate?.addEventListener('click', activateKey);
+  el.paywallClose?.addEventListener('click', () => el.paywall.close());
+  el.paywallKey?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); activateKey(); }
+  });
+}
+
+/* -------------------------------------------------------------------------- *
  * 12. Before/after compare slider
  * -------------------------------------------------------------------------- */
 
@@ -1401,7 +1542,7 @@ async function boot() {
   const ok = await checkHealth();
   if (!ok) { markSettingsUnavailable(); updateSubmitState(); return; }
 
-  await Promise.all([loadModels(), loadPresets()]);
+  await Promise.all([loadModels(), loadPresets(), loadAllowance()]);
   applySettings(loadSettings());
   await loadJobs();
   scheduleEstimate();
@@ -1410,6 +1551,7 @@ async function boot() {
 
 function init() {
   wireDropzone();
+  wirePaywall();
   wireSettings();
   syncSliderOutputs();
   syncTargetMode();

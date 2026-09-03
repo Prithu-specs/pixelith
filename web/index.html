@@ -123,6 +123,18 @@
         <ul id="queue" class="queue"></ul>
       </div>
 
+      <!-- Free-tier allowance -->
+      <div class="allowance" id="allowance" hidden aria-live="polite">
+        <div class="allowance__head">
+          <span class="allowance__tier" id="allowance-tier">Free tier</span>
+          <button type="button" class="allowance__cta" id="allowance-upgrade">
+            Get a licence
+          </button>
+        </div>
+        <div class="allowance__meters" id="allowance-meters"></div>
+        <p class="allowance__note" id="allowance-note"></p>
+      </div>
+
       <!-- Settings -->
       <div class="card">
         <h2 class="card__title">Settings</h2>
@@ -251,6 +263,45 @@
 
     <ul id="jobs" class="jobs"></ul>
   </section>
+<dialog id="paywall" class="paywall">
+  <form method="dialog" class="paywall__inner">
+    <h2 class="paywall__title">You have reached the free limit</h2>
+    <p class="paywall__detail" id="paywall-detail"></p>
+
+    <div class="paywall__tiers">
+      <div class="paywall__tier">
+        <span class="paywall__price">$10</span>
+        <span class="paywall__label">Personal &middot; one person, all your devices</span>
+      </div>
+      <div class="paywall__tier">
+        <span class="paywall__price">$200</span>
+        <span class="paywall__label">Commercial &middot; one company</span>
+      </div>
+    </div>
+    <p class="paywall__note">
+      One payment, for life. No subscription. A licence also removes the
+      invisible provenance mark from your output.
+    </p>
+
+    <p class="paywall__buy">
+      Buy a licence:
+      <a id="paywall-contact" href="mailto:licensing@pgatech.solutions">licensing@pgatech.solutions</a>
+    </p>
+
+    <label class="paywall__field">
+      <span>Already have a key?</span>
+      <input type="text" id="paywall-key" placeholder="Paste your licence key"
+             autocomplete="off" spellcheck="false">
+    </label>
+    <p class="paywall__error" id="paywall-error" hidden></p>
+
+    <div class="paywall__actions">
+      <button type="button" class="btn btn--ghost" id="paywall-close">Not now</button>
+      <button type="button" class="btn" id="paywall-activate">Activate</button>
+    </div>
+  </form>
+</dialog>
+
 </main>
 
 <footer class="site-footer">

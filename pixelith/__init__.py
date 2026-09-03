@@ -76,7 +76,9 @@ def license_info() -> dict:
             "video_bytes": FREE_VIDEO_BYTES,
         },
         "tiers": [dict(t) for t in TIERS],
-        # Stated for transparency: the Software does not measure or enforce any
-        # of the above. See clause 7 of the LICENCE.
-        "enforced_in_software": False,
+        # The allowance is measured and enforced locally; free output is
+        # marked. Nothing is transmitted. See clause 7 of the LICENCE.
+        "enforced_in_software": True,
+        "telemetry": False,
+        "free_output_watermarked": True,
     }

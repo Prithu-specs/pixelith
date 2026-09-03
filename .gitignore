@@ -65,3 +65,11 @@ desktop.ini
 .vscode/
 *.swp
 *~
+
+# ---- Licence signing material ----
+# The Ed25519 private key issues licence keys. Committing it would let anyone
+# mint their own. It belongs outside the repository entirely.
+*.pem
+*.key
+*private-key*
+*private_key*

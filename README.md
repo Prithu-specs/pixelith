@@ -775,15 +775,57 @@ real ceiling, not bytes:
 Most personal users will never reach the limit, because they would need to leave
 the machine running for weeks first. If you do reach it, $10 is not a lot to ask.
 
-### Nothing here is enforced in software
+### How the allowance works
 
-Pixelith contains **no licence key check, no usage metering, no activation and no
-telemetry**. It never contacts us and never reports what you process. That is
-deliberate: it is what makes it trustworthy for the people using it for free, and
-it is not going to change.
+The free allowance is **measured and enforced on your own machine**. Pixelith
+keeps a usage record locally, and when you reach a limit it stops and tells you
+how to get a licence. Licence keys are Ed25519-signed and verified offline
+against a public key built into the app, so activation works with no network at
+all.
 
-Which means the allowance rests on your honesty. If Pixelith is worth more to you
-than the free tier allows, paying for it is how it continues to exist.
+```
+$ pixelith status
+Free tier
+  images   87 of 100 used, 13 left
+  video    0.72 GB of 1.00 GB used, 0.28 GB left
+  output   carries an invisible provenance mark
+```
+
+**Pixelith still never contacts us.** No telemetry, no usage reports, no
+activation server, nothing about you or your files leaves the machine. The only
+network access it makes is downloading model weights on first run. You can
+verify all of that in the source.
+
+### The mark on free output
+
+Files produced on the free tier carry an **invisible, machine-readable mark**
+recording the tier, the installation, and where you were in your allowance. It
+is disclosed here, in the licence and in the app, because you are entitled to
+know what is in files you make.
+
+- It is **imperceptible** &mdash; measured at ~44 dB PSNR, altering only
+  mid-frequency luma coefficients.
+- It **survives JPEG re-compression** down to about quality 60, and PNG
+  round-trips. Low-bit marking would be more invisible on paper but is destroyed
+  the moment an image is saved as a JPEG, which is what happens to most shared
+  images.
+- It contains **no personal information** &mdash; no name, no file contents, no
+  location &mdash; and is never transmitted. It exists only in files you keep.
+- A **paid licence turns it off**. Licensed output is clean.
+
+Anyone can read a mark back:
+
+```bash
+pixelith verify photo.png
+```
+
+### What this does and does not achieve
+
+Being straight about it: the source is public, so a determined user can edit the
+check out. Local enforcement raises the bar from *"nothing stops me"* to
+*"I would have to modify the program"*, and the mark means free-tier output stays
+identifiable if it later turns up in commercial work. It is not DRM and it is not
+trying to be. It is there to make paying the easy path.
 
 ### Buying a licence
 

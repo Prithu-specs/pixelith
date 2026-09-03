@@ -80,7 +80,7 @@ def test_user_facing_docs_name_the_licensor():
 def test_ui_shows_the_terms_to_anyone_who_opens_it():
     html = (ROOT / "web/index.html").read_text()
     assert LICENSOR in html
-    assert "100 images" in html and "$10" in html and "$200" in html
+    assert "$10" in html and "$200" in html
 
 
 def test_contributing_grants_the_right_to_relicense_commercially():
@@ -125,11 +125,29 @@ def test_commercial_tier_has_no_free_allowance():
     assert "does not permit Commercial Use in any volume" in licence_text()
 
 
-def test_software_does_not_claim_to_enforce_the_limits():
-    """The honour-system promise is part of the deal; do not quietly break it."""
+def test_licence_text_matches_what_the_software_actually_does():
+    """The agreement describes local metering, offline key checks and a mark on
+    free output. If the code stops doing any of that the licence becomes a false
+    statement about the product, so the two are pinned together here."""
     info = pixelith.license_info()
-    assert info["enforced_in_software"] is False
-    assert "no licence key check, no usage metering" in licence_text()
+    assert info["enforced_in_software"] is True
+    assert info["free_output_watermarked"] is True
+    assert info["telemetry"] is False
+
+    licence = licence_text()
+    assert "keeps a usage record on your own computer" in licence
+    assert "verified on your machine using a public key" in licence
+    assert "does not contact us" in licence
+    assert "invisible, machine-readable mark" in licence
+    assert "carries no mark" in licence
+
+
+def test_the_watermark_is_disclosed_not_covert():
+    """Users are entitled to know what is embedded in files they produce."""
+    licence = licence_text()
+    assert "We disclose the mark here" in licence
+    assert "does not contain your name" in licence
+    assert "provenance mark" in (ROOT / "web/index.html").read_text()
 
 
 def test_prior_polyform_rights_are_preserved():

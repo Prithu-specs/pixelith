@@ -20,6 +20,7 @@ import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from . import compat  # registers the HEIF opener as a side effect
+from . import licensing, watermark
 from .config import LARGE_IMAGE_PIXELS, MODELS, PRESETS, UpscaleSettings
 from .engine import Engine
 
@@ -175,8 +176,11 @@ def upscale_image(
     """Upscale one still image. Returns a small report dict."""
     started = time.time()
     spec = settings.resolved_model()
-    eng = engine or Engine(spec, settings)
 
+    # Checked before any work, so a blocked job costs the user nothing.
+    licensing.check_allowance("image")
+
+    eng = engine or Engine(spec, settings)
     rgb, alpha, mode = _load_rgb(src)
     h, w = rgb.shape[:2]
     p = plan(w, h, settings.preset, settings.scale, spec.scale)
@@ -209,6 +213,26 @@ def upscale_image(
 
     out = _postprocess(out, settings)
 
+    # Free-tier output carries a machine-readable provenance mark. A paid
+    # licence turns it off. Disclosed in the licence and the interface - it is
+    # a mark of where the file came from, not a covert tracker.
+    marked = False
+    if licensing.current_tier() not in licensing.PAID_TIERS:
+        try:
+            usage = licensing.load_usage()
+            payload = watermark.build_payload(
+                watermark.TIER_FREE,
+                bytes.fromhex(usage.install_id),
+                usage.images + 1,
+            )
+            out = Image.fromarray(
+                watermark.embed(np.asarray(out.convert("RGB")), payload)
+            )
+            marked = True
+        except (watermark.WatermarkError, ValueError):
+            # Too small to carry a mark; not a reason to fail the job.
+            marked = False
+
     if alpha is not None:
         emit(0.97, "restoring transparency")
         a = Image.fromarray(alpha).resize((p.out_width, p.out_height), Image.LANCZOS)
@@ -226,9 +250,12 @@ def upscale_image(
     else:
         out.save(dest, optimize=True)
 
+    licensing.record(images=1)
+
     emit(1.0, "done")
     return {
         **p.as_dict(),
+        "watermarked": marked,
         "elapsed": round(time.time() - started, 2),
         "model": spec.key,
         "provider": eng.provider,

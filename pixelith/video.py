@@ -22,6 +22,7 @@ from typing import Callable
 
 import numpy as np
 
+from . import licensing
 from .config import UpscaleSettings
 from .engine import Cancelled, Engine
 from .pipeline import Plan, plan
@@ -153,8 +154,11 @@ def upscale_video(
     _require("ffmpeg")
     started = time.time()
     spec = settings.resolved_model()
-    eng = engine or Engine(spec, settings)
 
+    # Video counts against the allowance by input file size, checked up front.
+    licensing.check_allowance("video", video_bytes=src.stat().st_size)
+
+    eng = engine or Engine(spec, settings)
     info = probe(src)
     if info.frames <= 0:
         raise VideoError(f"could not determine the frame count of {src.name}.")
@@ -313,6 +317,7 @@ def upscale_video(
     if dest.exists() and dest.stat().st_size > 0:
         shutil.rmtree(seg_dir, ignore_errors=True)
         state_file.unlink(missing_ok=True)
+    licensing.record(video_bytes=src.stat().st_size)
     emit(1.0, "done", {})
 
     elapsed = time.time() - started

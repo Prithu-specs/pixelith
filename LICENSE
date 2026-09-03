@@ -145,18 +145,41 @@ not grant you rights beyond those set out below.
      right. Nothing in this agreement restricts anyone else's work.
 
 
-7. HONESTY, NOT ENFORCEMENT
+7. HOW THE ALLOWANCE IS MEASURED, AND THE MARK ON FREE OUTPUT
 
-7.1  The Software runs entirely on your own hardware. It contains no licence
-     key check, no usage metering, no activation and no telemetry. It does not
-     contact us, and it does not report what you process. This is deliberate:
-     it is what makes the Software trustworthy for the people using it for
-     free.
+7.1  The Software keeps a usage record on your own computer counting the
+     images and the volume of video it has processed. When a free allowance in
+     clause 2.1 is reached, the Software stops processing that kind of file and
+     tells you how to obtain a licence. This record stays on your machine.
 
-7.2  Compliance with the allowances in clause 2.1 therefore rests on you. We
-     have chosen to trust our users rather than police them. If the Software is
-     worth more to you than the limit allows, the fee is small and paying it is
-     how this continues to exist.
+7.2  Licence keys are verified on your machine using a public key built into
+     the Software. Activation works offline.
+
+7.3  The Software does not contact us. It has no telemetry, sends no usage
+     reports, and transmits nothing about you, your files or your machine. The
+     only network access it makes at all is downloading model weights on first
+     use, from a public host.
+
+7.4  Output produced under the Free Tier carries an invisible, machine-readable
+     mark identifying the tier, the installation, and the position in your
+     allowance at the time the file was made. The mark is designed not to be
+     perceptible, and does not alter what the image depicts.
+
+7.5  We disclose the mark here, in the interface and in the documentation
+     because you are entitled to know what is in files you produce. It
+     identifies the Software and the licence tier. It does not contain your
+     name, your files, your location or any personal information, and it is
+     never transmitted anywhere: it exists only in the files you keep, and can
+     only be read by someone you give a file to.
+
+7.6  Output produced under a Personal or Commercial Licence carries no mark.
+
+7.7  You may satisfy yourself about clauses 7.3 to 7.6 by reading the source
+     code, which is published in full.
+
+7.8  Removing or defeating the usage record, the licence check or the mark in
+     order to use the Software beyond your allowance is a breach of clause
+     5.2(a) and of this agreement.
 
 
 8. VERSIONS PREVIOUSLY RELEASED
