@@ -1,0 +1,67 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Tooling caches ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# ---- Environment / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Pixelith model cache ----
+# Default location is $PIXELITH_HOME (~/.cache/pixelith), outside the repo, but
+# ignore in-tree copies too in case PIXELITH_HOME is pointed here.
+/models/
+/model_cache/
+/.cache/
+*.onnx
+*.onnx.part
+*.pth
+*.bin
+*.safetensors
+
+# ---- Pixelith scratch and output ----
+# These are anchored with a leading slash on purpose. An unanchored rule matches
+# at every depth, and because macOS sets core.ignorecase=true, a bare
+# "Pixelith/" also matched the source package "pixelith/" and silently excluded
+# the entire application from the repository.
+/work/
+/outputs/
+/output/
+
+# ---- Media artifacts from manual runs and tests ----
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.avi
+# Keep any small, deliberately committed fixtures.
+!tests/fixtures/**
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~

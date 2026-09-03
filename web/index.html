@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Pixelith — local AI image and video upscaling, up to 8K.">
+<title>Pixelith</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235b5bd6'/%3E%3Cpath d='M9 20h6v-6H9zM17 9h6v6h-6z' fill='%23fff'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- Icon sprite. Referenced with <use href="#i-name">; kept out of the a11y tree. -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+    </symbol>
+    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m3.5 17 4.6-4.6a2 2 0 0 1 2.8 0l3.3 3.3"/><path d="m13.5 14.5 1.9-1.9a2 2 0 0 1 2.8 0l2.3 2.3"/>
+    </symbol>
+    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="5.5" width="13" height="13" rx="2.5"/><path d="m15.5 10.5 5-3v9l-5-3z"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v12"/><path d="m7.5 11.5 4.5 4.5 4.5-4.5"/><path d="M4 19h16"/>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7h16"/><path d="M10 4h4"/><path d="M6.5 7 7.4 19a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5L17.5 7"/><path d="M10.5 11v6M13.5 11v6"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="m6 6 12 12M18 6 6 18"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m5 12.5 4.5 4.5L19 7"/>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3.5 22 20H2z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.4" r=".9" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20.5 4v4.5H16"/>
+    </symbol>
+    <symbol id="i-offline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 4.5 21 20"/><path d="M5 12.5a10 10 0 0 1 3.4-2.2M19 12.5a10 10 0 0 0-5.7-2.4M8.5 16a5.5 5.5 0 0 1 2-1.3"/><circle cx="12" cy="19" r=".9" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-drag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m9.5 8-4 4 4 4M14.5 8l4 4-4 4"/>
+    </symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 13h4l1.5 3h7L17 13h4"/><path d="M4.6 5.7 3 13v4.5A1.5 1.5 0 0 0 4.5 19h15a1.5 1.5 0 0 0 1.5-1.5V13l-1.6-7.3A2 2 0 0 0 17.5 4h-11a2 2 0 0 0-1.9 1.7z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<a class="skip-link" href="#compose">Skip to upload</a>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="8" fill="currentColor"/><rect x="7" y="16" width="8" height="8" rx="1.5" fill="#fff" opacity=".95"/><rect x="17" y="8" width="8" height="8" rx="1.5" fill="#fff" opacity=".6"/></svg>
+      </span>
+      <span class="brand__text">
+        <span class="brand__name">Pixelith</span>
+        <span class="brand__tag">AI upscaling to 8K</span>
+      </span>
+    </div>
+    <div class="topbar__status">
+      <span id="health-pill" class="pill pill--muted" data-state="checking">
+        <span class="pill__dot" aria-hidden="true"></span>
+        <span id="health-text">Connecting…</span>
+      </span>
+    </div>
+  </div>
+</header>
+
+<!-- Shown whenever the API is unreachable. -->
+<div id="offline-banner" class="banner banner--danger" role="alert" hidden>
+  <svg class="icon" aria-hidden="true"><use href="#i-offline"/></svg>
+  <div class="banner__body">
+    <strong>Cannot reach the Pixelith server.</strong>
+    <span id="offline-detail">Make sure it is running, then try again.</span>
+  </div>
+  <button type="button" class="btn btn--ghost btn--sm" id="retry-health">
+    <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg> Retry
+  </button>
+</div>
+
+<main class="layout">
+
+  <!-- ───────────────────────── Compose column ───────────────────────── -->
+  <section id="compose" class="col col--compose" aria-labelledby="compose-h">
+    <h1 id="compose-h" class="col__title">New upscale</h1>
+
+    <form id="compose-form" novalidate>
+
+      <!-- Drop zone -->
+      <div id="dropzone" class="dropzone">
+        <svg class="dropzone__icon" aria-hidden="true"><use href="#i-upload"/></svg>
+        <p class="dropzone__lead">Drop files here</p>
+        <p class="dropzone__sub">or pick them from your device</p>
+        <!-- The input is the real control; the label is its visible, clickable
+             surface, so keyboard and pointer users share one code path. -->
+        <input id="file-input" class="visually-hidden" type="file" multiple
+               aria-describedby="dropzone-hint"
+               accept="image/*,video/*,.png,.jpg,.jpeg,.webp,.heic,.heif,.bmp,.tif,.tiff,.mp4,.mov,.mkv,.webm,.avi">
+        <label class="btn btn--primary dropzone__btn" for="file-input">Choose files</label>
+        <p id="dropzone-hint" class="dropzone__hint">
+          PNG, JPG, WEBP, HEIC, BMP, TIFF &middot; MP4, MOV, MKV, WEBM, AVI
+        </p>
+      </div>
+
+      <!-- Staged files -->
+      <div id="queue-wrap" class="queue-wrap" hidden>
+        <div class="section-head">
+          <h2 class="section-head__title">Ready to upscale <span id="queue-count" class="count"></span></h2>
+          <button type="button" class="btn btn--quiet btn--sm" id="clear-queue">Clear all</button>
+        </div>
+        <ul id="queue" class="queue"></ul>
+      </div>
+
+      <!-- Settings -->
+      <div class="card">
+        <h2 class="card__title">Settings</h2>
+
+        <fieldset class="field">
+          <legend class="field__label">Model</legend>
+          <div id="models" class="choices" role="radiogroup" aria-label="Upscaling model">
+            <p class="muted small" id="models-loading">Loading models…</p>
+          </div>
+          <p id="models-note" class="hint" hidden></p>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field__label">Target size</legend>
+          <div class="segmented" role="radiogroup" aria-label="How to choose the target size">
+            <label class="segmented__opt">
+              <input type="radio" name="target-mode" value="preset" checked>
+              <span>Preset</span>
+            </label>
+            <label class="segmented__opt">
+              <input type="radio" name="target-mode" value="scale">
+              <span>Custom scale</span>
+            </label>
+          </div>
+
+          <div id="preset-pane" class="pane">
+            <label class="field__label field__label--sub" for="preset">Resolution</label>
+            <div class="select-wrap">
+              <select id="preset" name="preset">
+                <option value="">Loading…</option>
+              </select>
+            </div>
+            <p class="hint">The longest edge is fitted to this target; aspect ratio is kept.</p>
+          </div>
+
+          <div id="scale-pane" class="pane" hidden>
+            <div class="slider-head">
+              <label class="field__label field__label--sub" for="scale">Scale factor</label>
+              <output class="slider-value" id="scale-out" for="scale">2.0&times;</output>
+            </div>
+            <input type="range" id="scale" name="scale" min="1.5" max="8" step="0.1" value="2">
+            <div class="slider-scale" aria-hidden="true"><span>1.5&times;</span><span>8&times;</span></div>
+          </div>
+        </fieldset>
+
+        <div class="field grid-2">
+          <div>
+            <div class="slider-head">
+              <label class="field__label field__label--sub" for="denoise">Denoise</label>
+              <output class="slider-value" id="denoise-out" for="denoise">0.00</output>
+            </div>
+            <input type="range" id="denoise" name="denoise" min="0" max="1" step="0.05" value="0"
+                   aria-describedby="denoise-hint">
+            <p id="denoise-hint" class="hint">Softens sensor noise and compression artefacts.</p>
+          </div>
+          <div>
+            <div class="slider-head">
+              <label class="field__label field__label--sub" for="sharpen">Sharpen</label>
+              <output class="slider-value" id="sharpen-out" for="sharpen">0.00</output>
+            </div>
+            <input type="range" id="sharpen" name="sharpen" min="0" max="1" step="0.05" value="0"
+                   aria-describedby="sharpen-hint">
+            <p id="sharpen-hint" class="hint">Adds edge contrast after upscaling.</p>
+          </div>
+        </div>
+
+        <div class="field grid-2">
+          <div id="image-format-wrap">
+            <label class="field__label field__label--sub" for="image-format">Image format</label>
+            <div class="select-wrap">
+              <select id="image-format">
+                <option value="png">PNG &middot; lossless</option>
+                <option value="jpg">JPG &middot; smaller</option>
+                <option value="webp">WEBP &middot; balanced</option>
+              </select>
+            </div>
+          </div>
+          <div id="video-format-wrap">
+            <label class="field__label field__label--sub" for="video-format">Video format</label>
+            <div class="select-wrap">
+              <select id="video-format">
+                <option value="mp4">MP4 &middot; H.264</option>
+                <option value="mov">MOV &middot; ProRes-friendly</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estimate -->
+      <div id="estimate-card" class="card card--estimate" hidden>
+        <h2 class="card__title">
+          <svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>
+          Before you start
+        </h2>
+        <div id="estimate-body" class="estimate" aria-live="polite" aria-busy="false"></div>
+        <div id="estimate-warnings" class="warnings"></div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn--primary btn--block" id="submit-btn" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>
+          <span id="submit-label">Add files to begin</span>
+        </button>
+        <p class="hint center" id="submit-hint">Everything runs locally on your machine.</p>
+      </div>
+    </form>
+  </section>
+
+  <!-- ───────────────────────── Jobs column ───────────────────────── -->
+  <section class="col col--jobs" aria-labelledby="jobs-h">
+    <div class="section-head section-head--sticky">
+      <h2 id="jobs-h" class="col__title">Jobs</h2>
+      <button type="button" class="btn btn--quiet btn--sm" id="refresh-jobs">
+        <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg> Refresh
+      </button>
+    </div>
+
+    <p id="job-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
+
+    <div id="jobs-empty" class="empty">
+      <svg class="empty__icon" aria-hidden="true"><use href="#i-inbox"/></svg>
+      <p class="empty__lead">No jobs yet</p>
+      <p class="empty__sub">Upscaled images and videos will appear here, with a live progress read-out and a before/after view.</p>
+    </div>
+
+    <ul id="jobs" class="jobs"></ul>
+  </section>
+</main>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<template id="tpl-job">
+  <li class="job" data-id="">
+    <div class="job__head">
+      <span class="job__kind" aria-hidden="true"><svg class="icon"><use href="#i-image"/></svg></span>
+      <div class="job__ident">
+        <p class="job__name"></p>
+        <p class="job__meta"></p>
+      </div>
+      <span class="pill job__pill"><span class="pill__dot" aria-hidden="true"></span><span class="job__status"></span></span>
+    </div>
+
+    <div class="job__progress" hidden>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="bar__fill"></div>
+      </div>
+      <div class="job__progress-meta">
+        <span class="job__stage"></span>
+        <span class="job__eta"></span>
+      </div>
+      <p class="job__message"></p>
+    </div>
+
+    <p class="job__error" hidden></p>
+
+    <div class="compare" hidden>
+      <div class="compare__frame">
+        <img class="compare__img compare__img--after" alt="After upscaling" loading="lazy" decoding="async">
+        <div class="compare__clip"><img class="compare__img compare__img--before" alt="Before upscaling" loading="lazy" decoding="async"></div>
+        <div class="compare__handle" role="slider" tabindex="0" aria-label="Before and after comparison position"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50 percent">
+          <span class="compare__grip" aria-hidden="true"><svg class="icon"><use href="#i-drag"/></svg></span>
+        </div>
+        <span class="compare__tag compare__tag--l" aria-hidden="true">Before</span>
+        <span class="compare__tag compare__tag--r" aria-hidden="true">After</span>
+      </div>
+    </div>
+
+    <div class="job__actions"></div>
+  </li>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
