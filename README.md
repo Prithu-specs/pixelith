@@ -112,8 +112,10 @@ python -m pixelith serve --lan
   phone / tablet  http://192.168.1.104:8420
 ```
 
-`--lan` serves to **everyone on your network with no password**, so use it on a
-network you trust, not on café Wi-Fi.
+There is **no sign-in, no account and no password** — anyone who opens that
+address can use it straight away. That is the point on your own Wi-Fi. The flip
+side is that Pixelith does not check who is asking, so use `--lan` on a network
+you trust rather than on public café Wi-Fi.
 
 ### Running without a GPU
 

@@ -41,8 +41,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
             print("     Open that on any device on the same Wi-Fi. No app needed.")
         else:
             print("  phone / tablet  could not detect a LAN address; check your network")
-        print("  NOTE: --lan exposes this server to everyone on your network, "
-              "with no password.")
+        print("     No sign-in and no account: anyone on this network can "
+              "just open it.")
+        print("     Use --lan on a network you trust, not on public Wi-Fi.")
     else:
         print("  (use --lan to reach it from a phone or tablet on the same Wi-Fi)")
     print(f"Results are written to {OUTPUT_DIR}")
