@@ -831,3 +831,20 @@ input[type="range"]::-moz-range-thumb {
 .paywall__error { margin: 0; font-size: var(--fs-xs, .8rem); color: var(--danger, #e5534b); }
 
 .paywall__actions { display: flex; gap: .5rem; justify-content: flex-end; }
+
+
+.paywall__region {
+  display: flex; gap: .35rem;
+  background: var(--bg-2, rgba(128,128,128,.08));
+  padding: .25rem; border-radius: 999px;
+}
+.paywall__region-btn {
+  flex: 1; border: 0; background: transparent; color: inherit;
+  font: inherit; font-size: var(--fs-xs, .8rem); font-weight: 600;
+  padding: .45rem .6rem; border-radius: 999px; cursor: pointer;
+  min-height: 36px;
+}
+.paywall__region-btn[aria-pressed="true"] {
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}

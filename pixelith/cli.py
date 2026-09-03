@@ -85,17 +85,20 @@ def cmd_info(args: argparse.Namespace) -> int:
 
 
 def cmd_license(args: argparse.Namespace) -> int:
-    from . import TIERS
+    from . import CURRENCIES, TIERS, tier_price
 
     lic = license_info()
     print(f"{lic['name']}")
     print(f"{lic['copyright']}")
     print()
-    print(f"  {'Tier':<12} {'Price':>7}   What it covers")
-    print(f"  {'-' * 12} {'-' * 7}   {'-' * 46}")
+    print(f"  {'Tier':<12} {'India':>10} {'Elsewhere':>11}   What it covers")
+    print(f"  {'-' * 12} {'-' * 10} {'-' * 11}   {'-' * 44}")
     for t in TIERS:
-        price = "free" if t["price_usd"] == 0 else f"${t['price_usd']}"
-        print(f"  {t['name']:<12} {price:>7}   {t['summary']}")
+        print(f"  {t['name']:<12} {tier_price(t['key'], 'INR'):>10} "
+              f"{tier_price(t['key'], 'USD'):>11}   {t['summary']}")
+    print()
+    print("  Indian prices are paid in rupees by UPI, card or net banking.")
+    print("  Elsewhere, local taxes are handled at checkout.")
     print()
     print("The free allowance is 100 still images and 1 GB of video input.")
     print("The two are independent - running out of one does not consume the")
@@ -149,9 +152,12 @@ def cmd_status(args: argparse.Namespace) -> int:
               f"{_fmt_bytes(st['video_bytes_remaining'])} left")
         print("  output   carries an invisible provenance mark")
         print()
+        from . import tier_price
         print("  A licence removes both limits and the mark, permanently:")
-        print("    $10   personal, one person, all their devices")
-        print("    $200  commercial, one company")
+        print(f"    {tier_price('personal','INR'):>8} / "
+              f"{tier_price('personal','USD'):<6} personal, one person, all their devices")
+        print(f"    {tier_price('commercial','INR'):>8} / "
+              f"{tier_price('commercial','USD'):<6} commercial, one company")
         from . import COMMERCIAL_CONTACT
         print(f"    Buy one at {COMMERCIAL_CONTACT}, then run "
               f"'pixelith activate <key>'")

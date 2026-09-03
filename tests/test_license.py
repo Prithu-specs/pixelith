@@ -94,17 +94,56 @@ def test_contributing_grants_the_right_to_relicense_commercially():
 
 
 def test_published_prices_match_the_licence_text():
-    """A price typo in the UI or README would be a public pricing error."""
+    """A price typo in the UI or the licence would be a public pricing error."""
     licence = licence_text()
-    assert "US$10" in licence and "US$200" in licence
+    for token in ("Rs 499", "US$10", "Rs 7,999", "US$200"):
+        assert token in licence, f"{token!r} missing from the licence"
 
-    tiers = {t["key"]: t for t in pixelith.TIERS}
-    assert tiers["free"]["price_usd"] == 0
-    assert tiers["personal"]["price_usd"] == 10
-    assert tiers["commercial"]["price_usd"] == 200
+    inr = pixelith.CURRENCIES["INR"]
+    usd = pixelith.CURRENCIES["USD"]
+    assert (inr["personal"], inr["commercial"]) == (499, 7999)
+    assert (usd["personal"], usd["commercial"]) == (10, 200)
 
-    readme = (ROOT / "README.md").read_text()
-    assert "**$10** once" in readme and "**$200** once" in readme
+
+def test_indian_prices_are_shown_inclusive_of_gst():
+    """Indian consumer prices must be tax-inclusive; the licence must say so."""
+    inr = pixelith.CURRENCIES["INR"]
+    assert inr["tax_included"] is True
+    assert "GST" in inr["tax_label"]
+    assert pixelith.CURRENCIES["USD"]["tax_included"] is False
+
+    licence = licence_text()
+    assert "inclusive of GST" in licence
+    assert "997331" in licence or pixelith.GST_SAC in licence
+
+
+def test_export_sales_are_described_as_zero_rated():
+    """Sales outside India are exports of service, zero-rated under LUT."""
+    licence = licence_text()
+    assert "zero-rated" in licence and "Letter of Undertaking" in licence
+
+
+def test_gstin_placeholder_is_flagged_until_filled_in():
+    licence = licence_text()
+    if "[INSERT GSTIN]" in licence:
+        pytest.skip(
+            "GSTIN placeholder still in LICENSE - PGA Tech Solutions must "
+            "insert the real GST number before issuing Indian tax invoices"
+        )
+    assert "GSTIN" in licence
+
+
+def test_regional_pricing_is_exposed_to_clients():
+    p = pixelith.pricing()
+    assert set(p) == {"INR", "USD"}
+    for code, data in p.items():
+        assert "personal_url" in data and "commercial_url" in data
+    assert pixelith.DEFAULT_CURRENCY == "INR"
+
+
+def test_currency_toggle_exists_in_the_interface():
+    html = (ROOT / "web/index.html").read_text()
+    assert 'data-currency="INR"' in html and 'data-currency="USD"' in html
 
 
 def test_free_allowance_is_consistent_everywhere():

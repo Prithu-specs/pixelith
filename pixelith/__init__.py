@@ -15,6 +15,10 @@ LICENSE_URL = "https://github.com/Prithu-specs/pixelith/blob/main/LICENSE"
 LICENSOR = "PGA Tech Solutions"
 COPYRIGHT = "Copyright (c) 2026 PGA Tech Solutions"
 COMMERCIAL_CONTACT = "licensing@pgatech.solutions"
+# Shown on Indian tax invoices and the pricing page. Set the real number here.
+GSTIN = _os.environ.get("PIXELITH_GSTIN", "") if (_os := __import__("os")) else ""
+GST_RATE = 0.18
+GST_SAC = "997331"  # licensing services for the right to use software
 REQUIRED_NOTICE = (
     "Required Notice: Copyright (c) 2026 PGA Tech Solutions "
     "(https://github.com/Prithu-specs/pixelith)"
@@ -29,11 +33,62 @@ PRIOR_LICENSE = "PolyForm-Noncommercial-1.0.0 (versions 0.1.x)"
 FREE_VIDEO_BYTES = 1_073_741_824       # 1 GB of video input
 FREE_IMAGE_COUNT = 100                 # 100 still images
 
+# Pricing is regional. India is the home market and is priced for it; the rest
+# of the world pays the international price. Indian payments settle through an
+# Indian gateway at about 2.4% all-in, while international sales go through a
+# merchant of record that handles VAT in the buyer's country and consolidates
+# everything into one inbound remittance - which is what keeps FEMA and e-FIRC
+# paperwork manageable from India.
+CURRENCIES = {
+    "INR": {
+        "symbol": "\u20b9",
+        "region": "India",
+        "personal": 499,
+        "commercial": 7999,
+        # Consumer prices in India are shown inclusive of tax, so these are the
+        # amounts actually charged. GST is broken out on the tax invoice.
+        "tax_included": True,
+        "tax_label": "incl. 18% GST",
+        "note": "Pay by UPI, card or net banking. Tax invoice issued.",
+    },
+    "USD": {
+        "symbol": "$",
+        "region": "Rest of the world",
+        "personal": 10,
+        "commercial": 200,
+        "tax_included": False,
+        "tax_label": "plus local tax at checkout",
+        "note": "An export of service from India, zero-rated under LUT.",
+    },
+}
+DEFAULT_CURRENCY = "INR"
+
+# Checkout links. Fill these in once the accounts exist; until then the paywall
+# falls back to the email route. Override without editing code by setting
+# PIXELITH_PAY_INR_PERSONAL and friends.
+import os as _os
+
+
+def _pay_url(currency: str, tier: str) -> str:
+    return _os.environ.get(f"PIXELITH_PAY_{currency}_{tier.upper()}", "")
+
+
+def pricing() -> dict:
+    """Regional prices plus whatever checkout links are configured."""
+    out = {}
+    for code, data in CURRENCIES.items():
+        out[code] = {
+            **{k: v for k, v in data.items()},
+            "personal_url": _pay_url(code, "personal"),
+            "commercial_url": _pay_url(code, "commercial"),
+        }
+    return out
+
+
 TIERS = (
     {
         "key": "free",
         "name": "Free",
-        "price_usd": 0,
         "use": "personal",
         "images": FREE_IMAGE_COUNT,
         "video_bytes": FREE_VIDEO_BYTES,
@@ -42,7 +97,6 @@ TIERS = (
     {
         "key": "personal",
         "name": "Personal",
-        "price_usd": 10,
         "use": "personal",
         "images": None,
         "video_bytes": None,
@@ -51,13 +105,20 @@ TIERS = (
     {
         "key": "commercial",
         "name": "Commercial",
-        "price_usd": 200,
         "use": "commercial",
         "images": None,
         "video_bytes": None,
         "summary": "One company. Any commercial use, unlimited, for life.",
     },
 )
+
+
+def tier_price(tier: str, currency: str = DEFAULT_CURRENCY) -> str:
+    cur = CURRENCIES.get(currency, CURRENCIES[DEFAULT_CURRENCY])
+    if tier == "free":
+        return "free"
+    amount = cur[tier]
+    return f"{cur['symbol']}{amount:,}"
 
 
 def license_info() -> dict:
@@ -76,6 +137,8 @@ def license_info() -> dict:
             "video_bytes": FREE_VIDEO_BYTES,
         },
         "tiers": [dict(t) for t in TIERS],
+        "pricing": pricing(),
+        "default_currency": DEFAULT_CURRENCY,
         # The allowance is measured and enforced locally; free output is
         # marked. Nothing is transmitted. See clause 7 of the LICENCE.
         "enforced_in_software": True,

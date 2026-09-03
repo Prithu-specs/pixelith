@@ -268,19 +268,25 @@
     <h2 class="paywall__title">You have reached the free limit</h2>
     <p class="paywall__detail" id="paywall-detail"></p>
 
+    <div class="paywall__region" role="group" aria-label="Where are you?">
+      <button type="button" class="paywall__region-btn" data-currency="INR">India</button>
+      <button type="button" class="paywall__region-btn" data-currency="USD">Elsewhere</button>
+    </div>
+
     <div class="paywall__tiers">
       <div class="paywall__tier">
-        <span class="paywall__price">$10</span>
+        <span class="paywall__price" id="price-personal">&#8377;499</span>
         <span class="paywall__label">Personal &middot; one person, all your devices</span>
       </div>
       <div class="paywall__tier">
-        <span class="paywall__price">$200</span>
+        <span class="paywall__price" id="price-commercial">&#8377;7,999</span>
         <span class="paywall__label">Commercial &middot; one company</span>
       </div>
     </div>
     <p class="paywall__note">
-      One payment, for life. No subscription. A licence also removes the
-      invisible provenance mark from your output.
+      <span id="paywall-tax">incl. 18% GST</span> &middot; one payment, for life.
+      No subscription. A licence also removes the invisible provenance mark from
+      your output.
     </p>
 
     <p class="paywall__buy">

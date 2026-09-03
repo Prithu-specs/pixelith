@@ -18,7 +18,8 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__, license_info
+from . import __version__, license_info, pricing
+from . import DEFAULT_CURRENCY as _DEFAULT_CURRENCY
 from .config import MODELS, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import available_providers, choose_providers
 from . import licensing
@@ -179,8 +180,8 @@ async def create_job(
                     "a one-time payment: $10 for personal use, $200 for "
                     "commercial use, both for life."
                 ),
-                "personal_usd": 10,
-                "commercial_usd": 200,
+                "pricing": pricing(),
+                "default_currency": default_currency(),
                 "contact": license_info()["commercial_contact"],
                 "allowance": licensing.allowance_status(),
             },
@@ -204,6 +205,15 @@ async def create_job(
 
 class ActivateRequest(BaseModel):
     key: str
+
+
+def default_currency() -> str:
+    return _DEFAULT_CURRENCY
+
+
+@app.get("/api/pricing")
+def get_pricing() -> dict:
+    return {"default": _DEFAULT_CURRENCY, "currencies": pricing()}
 
 
 @app.get("/api/allowance")

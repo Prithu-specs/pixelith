@@ -48,6 +48,9 @@ const el = {
   allowanceUpgrade:$('#allowance-upgrade'),
   paywall:$('#paywall'),
   paywallDetail:$('#paywall-detail'),
+  pricePersonal:$('#price-personal'),
+  priceCommercial:$('#price-commercial'),
+  paywallTax:$('#paywall-tax'),
   paywallContact:$('#paywall-contact'),
   paywallKey:$('#paywall-key'),
   paywallError:$('#paywall-error'),
@@ -1244,6 +1247,54 @@ function stopWatching(id) {
  * -------------------------------------------------------------------------- */
 
 let allowance = null;
+let pricing = null;
+let currency = null;
+
+/** India gets rupee pricing; everyone else the international price. */
+function guessCurrency() {
+  try {
+    const saved = localStorage.getItem('pixelith.currency');
+    if (saved) return saved;
+  } catch { /* private mode */ }
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if (/Calcutta|Kolkata/i.test(tz)) return 'INR';
+    if ((navigator.language || '').toLowerCase().endsWith('-in')) return 'INR';
+  } catch { /* older browser */ }
+  return 'USD';
+}
+
+function money(code, amount) {
+  const sym = code === 'INR' ? '\u20b9' : '$';
+  return sym + amount.toLocaleString(code === 'INR' ? 'en-IN' : 'en-US');
+}
+
+function applyCurrency(code) {
+  if (!pricing || !pricing[code]) return;
+  currency = code;
+  try { localStorage.setItem('pixelith.currency', code); } catch { /* ignore */ }
+  const p = pricing[code];
+  setText(el.pricePersonal, money(code, p.personal));
+  setText(el.priceCommercial, money(code, p.commercial));
+  setText(el.paywallTax, p.tax_label || '');
+  document.querySelectorAll('.paywall__region-btn').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.currency === code));
+  });
+  // Point the buy link at a checkout URL when one is configured.
+  const url = p.commercial_url || p.personal_url;
+  if (url) {
+    el.paywallContact.textContent = 'Buy now';
+    el.paywallContact.href = url;
+  }
+}
+
+async function loadPricing() {
+  try {
+    const res = await api('/pricing');
+    pricing = res.currencies;
+    applyCurrency(guessCurrency() || res.default);
+  } catch { /* offline */ }
+}
 
 function fmtBytes(n) {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`;
@@ -1346,6 +1397,9 @@ async function activateKey() {
 function wirePaywall() {
   if (!el.paywall) return;
   el.allowanceUpgrade?.addEventListener('click', () => openPaywall(null));
+  document.querySelectorAll('.paywall__region-btn').forEach((b) => {
+    b.addEventListener('click', () => applyCurrency(b.dataset.currency));
+  });
   el.paywallActivate?.addEventListener('click', activateKey);
   el.paywallClose?.addEventListener('click', () => el.paywall.close());
   el.paywallKey?.addEventListener('keydown', (e) => {
@@ -1542,7 +1596,7 @@ async function boot() {
   const ok = await checkHealth();
   if (!ok) { markSettingsUnavailable(); updateSubmitState(); return; }
 
-  await Promise.all([loadModels(), loadPresets(), loadAllowance()]);
+  await Promise.all([loadModels(), loadPresets(), loadAllowance(), loadPricing()]);
   applySettings(loadSettings());
   await loadJobs();
   scheduleEstimate();

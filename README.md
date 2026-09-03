@@ -740,14 +740,18 @@ modify it for your own use. Reading it does not grant rights beyond the licence.
 
 ### Pricing
 
-| Tier | Price | Covers |
-|---|---|---|
-| **Free** | &mdash; | Personal use, up to **100 images** and **1 GB of video input** |
-| **Personal** | **$10** once | One person, all their devices. Unlimited images and video, for life |
-| **Commercial** | **$200** once | One company. Any commercial use, unlimited, for life |
+| Tier | India | Elsewhere | Covers |
+|---|---|---|---|
+| **Free** | &mdash; | &mdash; | Personal use, **100 images** and **1 GB of video input** |
+| **Personal** | **&#8377;499** | **$10** | One person, all their devices. Unlimited, for life |
+| **Commercial** | **&#8377;7,999** | **$200** | One company. Any commercial use, unlimited, for life |
 
-Both paid tiers are one-time payments. There is nothing to renew, no
-subscription, and no expiry.
+One-time payments. Nothing to renew, no subscription, no expiry.
+
+Pixelith is made by PGA Tech Solutions in India. **Rupee prices include 18% GST**
+and a tax invoice is issued; prices elsewhere are exclusive of local tax, which is
+added at checkout. Which price applies depends on where you or your organisation
+are established.
 
 **The two free allowances are independent.** Reaching 100 images does not consume
 your video allowance, and vice versa. A single paid licence removes both &mdash;
