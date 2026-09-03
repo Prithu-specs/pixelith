@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
+# commercial use requires a separate licence. See LICENSE.
 """Platform capability detection and optional format plugins.
 
 Pixelith runs natively on Windows, macOS and Linux. Phones and tablets are

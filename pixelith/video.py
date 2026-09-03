@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
+# commercial use requires a separate licence. See LICENSE.
 """The video path: decode -> upscale -> encode, without ever unpacking frames to disk.
 
 Long jobs are the norm here (an 8K pass is measured in hours), so the run is cut

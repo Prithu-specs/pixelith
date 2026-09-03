@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
+# commercial use requires a separate licence. See LICENSE.
 """Command line interface: `python -m pixelith ...`"""
 from __future__ import annotations
 
@@ -6,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import __version__
+from . import __version__, license_info
 from .config import MODELS, OUTPUT_DIR, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import Cancelled, Engine, available_providers, choose_providers
 from .models import ensure, status as model_status
@@ -62,6 +65,9 @@ def cmd_info(args: argparse.Namespace) -> int:
     print(f"  ffmpeg     : {'yes' if have_ffmpeg() else 'NOT FOUND (video disabled)'}")
     print(f"  HEIC/HEIF  : {'yes' if info['heic'] else 'no (pip install pillow-heif)'}")
     print(f"  providers  : {', '.join(available_providers())}")
+    lic = license_info()
+    print(f"  license    : {lic['name']}")
+    print(f"               {lic['copyright']} - noncommercial use only")
     print("\nModels:")
     for m in model_status():
         spec = MODELS[m["key"]]
@@ -70,6 +76,25 @@ def cmd_info(args: argparse.Namespace) -> int:
         print(f"           runs on {choose_providers(spec=spec)[0]}")
         print(f"           {m['notes']}")
     print("\nPresets: " + ", ".join(f"{k} ({v[0]}x{v[1]})" for k, v in PRESETS.items()))
+    return 0
+
+
+def cmd_license(args: argparse.Namespace) -> int:
+    lic = license_info()
+    print(f"{lic['name']}  ({lic['spdx']})")
+    print(f"{lic['copyright']}")
+    print()
+    print("Free of charge for personal, hobby, educational, research and other")
+    print("noncommercial use. Any use in or for a business - including internal")
+    print("company use and paid services built on it - requires a separate")
+    print(f"commercial licence from {lic['licensor']}.")
+    print()
+    print(f"  Full terms       {lic['url']}")
+    print(f"  Commercial use   {lic['commercial_contact']}")
+    print()
+    print("The bundled neural network weights are third-party works under the")
+    print("BSD 3-Clause licence and are not covered by the terms above; see")
+    print("NOTICE.md.")
     return 0
 
 
@@ -226,6 +251,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     i = sub.add_parser("info", help="show models, providers and paths")
     i.set_defaults(func=cmd_info)
+
+    lic = sub.add_parser("license", help="show the licence and commercial terms")
+    lic.set_defaults(func=cmd_license)
 
     d = sub.add_parser("download", help="pre-download model weights")
     d.add_argument("models", nargs="*", choices=sorted(MODELS) + [])

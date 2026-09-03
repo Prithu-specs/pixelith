@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+   Copyright (c) 2026 PGA Tech Solutions. Noncommercial use only;
+   commercial use requires a separate licence. See LICENSE. */
 /* ============================================================================
  * Pixelith web UI
  *

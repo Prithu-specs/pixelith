@@ -6,6 +6,37 @@ means here.
 
 ---
 
+## Licensing of contributions
+
+Pixelith is copyright &copy; 2026 PGA Tech Solutions and is released under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). PGA Tech Solutions also sells
+commercial licences to organisations that fall outside those terms.
+
+That second part is why this section exists. If contributors kept copyright in
+their patches under noncommercial-only terms, nobody — including PGA Tech
+Solutions — could grant a commercial licence covering the whole work, and the
+project would quietly become unlicensable.
+
+**By opening a pull request you confirm that:**
+
+1. You wrote the contribution yourself, or have the right to submit it.
+2. You grant PGA Tech Solutions a perpetual, worldwide, irrevocable,
+   royalty-free licence to use, modify, and distribute your contribution,
+   **including the right to license it under commercial terms** alongside the
+   rest of Pixelith.
+3. You retain your own copyright in what you wrote. This is a licence grant, not
+   an assignment — you keep the right to use your own work elsewhere.
+
+If you are contributing on behalf of an employer, make sure they are content
+with the above before you open the PR.
+
+Contributions that carry an incompatible licence — code copied from a GPL
+project, for example — cannot be merged, regardless of quality. If you are
+adapting something from elsewhere, say so in the PR and name the source and its
+licence.
+
+---
+
 ## Before you write code
 
 Please read the [Limitations](README.md#limitations) section of the README

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
+# commercial use requires a separate licence. See LICENSE.
 """FastAPI app serving the REST API in docs/API.md plus the static web UI."""
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__
+from . import __version__, license_info
 from .config import MODELS, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import available_providers, choose_providers
 from .compat import summary as platform_summary
@@ -64,6 +67,7 @@ def health() -> dict:
             "video": sorted(VIDEO_SUFFIXES) if have_ffmpeg() else [],
         },
         "platform": platform_summary(),
+        "license": license_info(),
     }
 
 

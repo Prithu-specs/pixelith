@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
+# commercial use requires a separate licence. See LICENSE.
 """Job queue: one worker, live progress, cancellation, and SSE fan-out.
 
 Deliberately single-worker. Inference already saturates every core, so running

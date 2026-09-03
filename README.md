@@ -730,8 +730,12 @@ recognised if your ONNX Runtime build provides it, but it is untested here.
 
 ## License
 
-Pixelith is released under the
-[**PolyForm Noncommercial License 1.0.0**](LICENSE).
+Pixelith is **copyright &copy; 2026 PGA Tech Solutions** and is licensed under the
+[**PolyForm Noncommercial License 1.0.0**](LICENSE)
+(SPDX: `PolyForm-Noncommercial-1.0.0`).
+
+PGA Tech Solutions is the licensor. Commercial licences are granted by PGA Tech
+Solutions and by no one else.
 
 ### License, in plain English
 
@@ -750,9 +754,34 @@ non-commercial and you pass this licence along with it.
 
 **What is not covered:** using Pixelith as part of a business, in commercial
 production work, in client deliverables, in a paid product or service, or in
-anything with an anticipated commercial application. If you want to do any of
-that, open an issue and we will sort out terms. The answer is not automatically
-no — it just needs to be an actual arrangement.
+anything with an anticipated commercial application. Internal use inside a
+company counts as commercial even if you never sell the output.
+
+### Commercial licensing
+
+If you want to use Pixelith commercially, that is available — it just needs an
+actual agreement rather than an assumption.
+
+**Contact: [licensing@pgatech.solutions](mailto:licensing@pgatech.solutions)**
+
+Please include what you want to build, roughly what volume, and whether you need
+to redistribute Pixelith or only run it yourself. The answer is not automatically
+no.
+
+### If you redistribute Pixelith
+
+The licence obliges you to pass on both the terms and the licensor's required
+notice. Keep this line intact, exactly as it appears at the top of
+[`LICENSE`](LICENSE):
+
+```
+Required Notice: Copyright (c) 2026 PGA Tech Solutions
+(https://github.com/Prithu-specs/pixelith)
+```
+
+Stripping that notice, or the copyright headers in the source files, is itself a
+breach of the licence — it is the mechanism by which downstream users are put on
+notice, so it is treated seriously.
 
 ### Two things to be aware of
 
@@ -766,7 +795,16 @@ no — it just needs to be an actual arrangement.
 2. **The licence covers Pixelith's own code only.** Model weights, ONNX Runtime,
    FFmpeg, and the Python libraries all carry their own terms — see
    [`NOTICE.md`](NOTICE.md). Nothing here imposes Pixelith's noncommercial
-   restriction on anyone else's work.
+   restriction on anyone else's work. In particular the Real-ESRGAN weights are
+   BSD 3-Clause and remain freely usable commercially in their own right; what
+   requires a licence from PGA Tech Solutions is Pixelith — the engine, the
+   pipeline, the server, the interface and the tooling around them.
+3. **A licence is a legal instrument, not a technical lock.** Pixelith runs
+   entirely on the user's own machine and does not phone home, check a key, or
+   report usage — deliberately, because that is what makes it trustworthy for
+   the people it is free for. Compliance rests on the notice being clear and on
+   PGA Tech Solutions' ability to act on a breach, not on the software policing
+   anyone.
 
 The plain-English summary above is a convenience, not a substitute. The
 [`LICENSE`](LICENSE) file is what governs.
