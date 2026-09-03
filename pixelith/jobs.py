@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
+from .compat import image_suffixes
 from .config import OUTPUT_DIR, WORK_DIR, UpscaleSettings
 from .models import is_available
 from .engine import Cancelled, Engine
@@ -22,7 +23,9 @@ from .video import VideoError, have_ffmpeg, probe, upscale_video
 
 log = logging.getLogger("pixelith.jobs")
 
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif"}
+# Only what this machine can actually decode: HEIC needs the optional
+# pillow-heif plugin, and claiming it without the plugin fails at open() time.
+IMAGE_SUFFIXES = image_suffixes()
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".mpg", ".mpeg"}
 
 TERMINAL = {"done", "error", "cancelled"}

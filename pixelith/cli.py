@@ -25,17 +25,41 @@ def _bar(frac: float, width: int = 32) -> str:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
+    from .compat import lan_address, summary
     from .server import serve
-    print(f"Pixelith {__version__}  ->  http://{args.host}:{args.port}")
+
+    host = "0.0.0.0" if args.lan else args.host
+    info = summary()
+
+    print(f"Pixelith {__version__} on {info['os']} ({info['arch']}), "
+          f"{info['cpus']} cores, {info['ram_gb']} GB")
+    print(f"  this computer   http://127.0.0.1:{args.port}")
+    if args.lan:
+        ip = lan_address()
+        if ip:
+            print(f"  phone / tablet  http://{ip}:{args.port}")
+            print("     Open that on any device on the same Wi-Fi. No app needed.")
+        else:
+            print("  phone / tablet  could not detect a LAN address; check your network")
+        print("  NOTE: --lan exposes this server to everyone on your network, "
+              "with no password.")
+    else:
+        print("  (use --lan to reach it from a phone or tablet on the same Wi-Fi)")
     print(f"Results are written to {OUTPUT_DIR}")
-    serve(args.host, args.port, args.reload)
+    serve(host, args.port, args.reload)
     return 0
 
 
 def cmd_info(args: argparse.Namespace) -> int:
+    from .compat import summary
+
+    info = summary()
     print(f"Pixelith {__version__}")
+    print(f"  platform   : {info['os']} {info['arch']}, python {info['python']}")
+    print(f"  hardware   : {info['cpus']} cores, {info['ram_gb']} GB RAM")
     print(f"  output dir : {OUTPUT_DIR}")
-    print(f"  ffmpeg     : {'yes' if have_ffmpeg() else 'NOT FOUND'}")
+    print(f"  ffmpeg     : {'yes' if have_ffmpeg() else 'NOT FOUND (video disabled)'}")
+    print(f"  HEIC/HEIF  : {'yes' if info['heic'] else 'no (pip install pillow-heif)'}")
     print(f"  providers  : {', '.join(available_providers())}")
     print("\nModels:")
     for m in model_status():
@@ -179,6 +203,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("serve", help="run the web UI")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8420)
+    s.add_argument("--lan", action="store_true",
+                   help="serve to phones and tablets on the same network")
     s.add_argument("--reload", action="store_true")
     s.set_defaults(func=cmd_serve)
 

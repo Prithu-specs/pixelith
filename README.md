@@ -24,6 +24,7 @@ honest set of numbers about how long things take.
 
 - [Features](#features)
 - [Requirements](#requirements)
+- [Which devices does this run on?](#which-devices-does-this-run-on)
 - [Install](#install)
 - [Quick start](#quick-start)
 - [Models](#models)
@@ -68,19 +69,79 @@ honest set of numbers about how long things take.
 |---|---|
 | **Python** | 3.10 or newer |
 | **FFmpeg** | Required for all video work; must be on your `PATH` |
-| **Disk** | ~70 MB for both model files, plus scratch space for video frames |
-| **RAM** | 8 GB is workable; 16 GB+ is comfortable for 4K and above |
+| **Disk** | ~70 MB for both model files, plus scratch space while video runs |
+| **RAM** | 4 GB minimum, 8 GB workable, 16 GB+ comfortable for 4K and above |
 | **Network** | Only on first run, to fetch model weights |
+| **GPU** | **Not required.** See below. |
 
-Acceleration is optional. Pixelith runs on plain CPU everywhere and will use a
-faster execution provider when one is available:
+---
 
-| Platform | Provider | Notes |
+## Which devices does this run on?
+
+Pixelith is a small local web server plus a browser interface. That split is what
+makes it work everywhere: the computer does the maths, and *any* device with a
+browser can drive it.
+
+### Runs the software itself
+
+| Platform | Status | Notes |
 |---|---|---|
-| NVIDIA (Linux, Windows) | `CUDAExecutionProvider` | Fastest option wherever present |
-| Apple silicon | `CoreMLExecutionProvider` | Helps the `quality` model; **hurts** the `fast` one |
-| Windows (any GPU) | `DmlExecutionProvider` | DirectML, including AMD and Intel |
-| Everything else | `CPUExecutionProvider` | Always available; the fallback |
+| **Windows** 10/11 (x64, ARM64) | Supported | Prebuilt wheels for every dependency; no compiler needed |
+| **macOS** 12+ (Apple silicon, Intel) | Supported | Uses CoreML when it helps |
+| **Linux** (x86-64, aarch64) | Supported | glibc and musl wheels both published |
+| **Raspberry Pi 4/5** (64-bit) | Works, slowly | Fine for photos; do not attempt video |
+
+### Uses it from a browser
+
+| Device | How |
+|---|---|
+| **Android** phone/tablet | Start with `--lan`, open the printed address in Chrome |
+| **iPhone / iPad** | Same, in Safari. HEIC photos upload and convert correctly |
+| **Any laptop** on the network | Same address, any modern browser |
+
+Android and iOS cannot run the engine themselves — ONNX Runtime publishes no
+wheels for either — so there is no standalone mobile app, and this is not a
+limitation Pixelith can engineer around. Point the phone at a computer instead:
+
+```bash
+python -m pixelith serve --lan
+```
+
+```
+  this computer   http://127.0.0.1:8420
+  phone / tablet  http://192.168.1.104:8420
+```
+
+`--lan` serves to **everyone on your network with no password**, so use it on a
+network you trust, not on café Wi-Fi.
+
+### Running without a GPU
+
+This is the normal case and it is fully supported. There is no CUDA requirement,
+no minimum VRAM, and no separate build to install — the default `pip install`
+is the CPU build.
+
+Pixelith adapts to the machine it finds. It picks the execution provider *and*
+the tile size together, because the two interact: on a CPU-only machine, using
+the tile size that suits a neural engine costs about **2x** the runtime. Choosing
+correctly is automatic.
+
+| Machine | What happens | 1080p frame, `fast` |
+|---|---|---|
+| NVIDIA GPU | CUDA, large tiles | Fastest; not benchmarked here |
+| Apple silicon | CoreML, tile 192 | ~8.6 s |
+| **Any CPU, no GPU** | **CPU, tile 512** | **~8.5 s on an M5 Pro** |
+| Windows with AMD/Intel GPU | DirectML, tile 384 | Untested |
+| 4 GB RAM machine | Tiles capped at 192 | Slower, but it completes |
+
+On a CPU-only machine an older or slower processor will of course take longer
+than the figure above — that row is the same M5 Pro with acceleration disabled,
+which isolates the effect of the provider rather than predicting your laptop.
+Expect a mainstream 4-core laptop to be a few times slower again. Photos remain
+practical; long video does not become practical on any CPU.
+
+If you need to force a choice, `--tile` overrides the automatic pick. Lower it
+if you hit an out-of-memory error, and otherwise leave it alone.
 
 ---
 
@@ -299,25 +360,27 @@ but the *ratios* between models and providers hold up broadly.
 Throughput is megapixels of **input** per second, measured end to end: a real
 file in, a written file out, including tiling and blending.
 
-| Model | Best provider | 1080p frame | Effective throughput |
-|---|---|---|---|
-| `fast` (SRVGG x4v3) | CoreML, tile 192 | **9.1 s** | ~0.23 MPix/s |
-| `quality` (x4plus RRDBNet) | CoreML, tile 192 | ~47 s | ~0.044 MPix/s |
+| Model | 1080p frame | Effective throughput |
+|---|---|---|
+| `fast` (SRVGG x4v3) | **~8.6 s** | ~0.24 MPix/s |
+| `quality` (x4plus RRDBNet) | ~45 s | ~0.046 MPix/s |
 
 Two things here are worth knowing, because both cost real hours if you get them
 wrong.
 
-> **Benchmark a whole frame, not one tile.** Timing a single tile in a loop
-> suggested the `fast` model ran at 0.52 MPix/s and that plain CPU beat CoreML.
-> Both conclusions were wrong. That loop re-runs one cached shape with no memory
-> pressure and ignores tiling overhead. On real 1080p frames CoreML is **1.9x
-> faster** than CPU (8.3 s vs 16.0 s), and true throughput is less than half the
-> micro-benchmark figure.
+> **Tile size matters more than the execution provider.** On the same 1080p
+> frame, CPU and CoreML finish within noise of each other *when each runs at its
+> own best tile size* — 8.5 s and 8.7 s. But CPU forced onto CoreML's tile size
+> takes 11.1 s, a 30% penalty for one setting. Threaded CPU kernels want a few
+> large tiles; the neural engine wants many small ones. Pixelith picks the tile
+> size from the active provider and the machine's RAM, so you should not need to
+> touch it.
 
-> **Tile size matters more than you would expect.** On the same 1080p frame the
-> `fast` model takes 8.3 s at tile 192 but 14.2 s at tile 256 — a 1.7x penalty
-> for one setting. The defaults are the measured optimum; `--tile` is there for
-> memory-constrained machines, not for speed.
+> **Benchmark a whole frame, not one tile, and do it on an idle machine.** An
+> early version of this README claimed CoreML was 1.9x faster than CPU. That was
+> wrong. It came from timing a single cached tile while other work was running,
+> and from comparing CPU at a bad tile size against CoreML at a good one. The
+> numbers above come from interleaved A/B runs on an idle machine.
 
 Tiling also means the network processes more pixels than the image contains. A
 tile grid with 16 px of overlap covers about **1.4x** the real pixel count at
@@ -353,8 +416,9 @@ Video is upscaled frame by frame. There is no temporal shortcut, no keyframe
 interpolation, no reuse between frames. One minute of 1080p at 30 fps is 1,800
 separate 1080p upscales at ~9 s each, which is **about four and a half hours**.
 
-Times below use the `fast` model on its best provider. There is no faster
-configuration.
+Times below use the `fast` model with auto-selected tiling. A CUDA GPU will beat
+these substantially; a CPU-only laptop lands in the same ballpark as the figures
+here, because tile sizing matters more than the provider.
 
 | Source | Per frame | 10 s @30 | 1 min @30 | 5 min @30 | 1 min @60 |
 |---|---|---|---|---|---|
@@ -503,6 +567,41 @@ you decide whether Pixelith fits your problem.
 ---
 
 ## Troubleshooting
+
+### My phone cannot open the page
+
+Start the server with `--lan` — without it Pixelith binds to `127.0.0.1` and is
+only reachable from the machine it runs on.
+
+```bash
+python -m pixelith serve --lan
+```
+
+If it still will not connect: the phone must be on the **same** network (not a
+guest VLAN), and the computer's firewall must allow the port. On Windows,
+approve the prompt for "Private networks" the first time. On macOS, check System
+Settings > Network > Firewall. If `--lan` prints no address, the machine has no
+routable LAN interface, which usually means a VPN is capturing the route.
+
+### HEIC photos are rejected
+
+The `.heic` and `.heif` types only appear once `pillow-heif` is installed:
+
+```bash
+pip install pillow-heif
+```
+
+`python -m pixelith info` reports `HEIC/HEIF: yes` when it is working. Pixelith
+deliberately does not advertise formats it cannot decode, so an install without
+the plugin will reject iPhone photos at upload rather than failing mid-job.
+
+### It is slow and I have no GPU
+
+That is expected, and the tile size is already chosen for you. Do not lower
+`--tile` for speed; on a CPU-only machine smaller tiles are *slower*, sometimes
+by 2x. Lower it only to escape an out-of-memory error. Use the `fast` model, and
+treat long video as an overnight job or not at all.
+
 
 **Start here:** run `python -m pixelith info`. It answers most of the questions
 below in one go — providers, per-model provider selection, FFmpeg, and paths.

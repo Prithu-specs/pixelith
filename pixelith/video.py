@@ -341,20 +341,23 @@ def _concat(
     listing = seg_dir / "segments.txt"
     lines = []
     for i in range(count):
-        seg = seg_dir / f"seg_{i:05d}.mp4"
-        if not seg.exists():
+        name = f"seg_{i:05d}.mp4"
+        if not (seg_dir / name).exists():
             raise VideoError(f"segment {i} is missing; cannot assemble the output.")
-        lines.append(f"file '{seg.resolve().as_posix()}'")
-    listing.write_text("\n".join(lines))
+        # Relative names, resolved against the listing's own directory. Absolute
+        # Windows paths would put a drive letter and backslashes inside the
+        # demuxer's quoted-path syntax, which it does not parse reliably.
+        lines.append(f"file '{name}'")
+    listing.write_text("\n".join(lines) + "\n")
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     args = ["ffmpeg", "-v", "error", "-y",
-            "-f", "concat", "-safe", "0", "-i", str(listing)]
+            "-f", "concat", "-safe", "0", "-i", listing.name]
     if has_audio:
-        args += ["-i", str(original), "-map", "0:v:0", "-map", "1:a:0",
+        args += ["-i", str(original.resolve()), "-map", "0:v:0", "-map", "1:a:0",
                  "-c:a", "aac", "-b:a", "192k", "-shortest"]
-    args += ["-c:v", "copy", "-movflags", "+faststart", str(dest)]
+    args += ["-c:v", "copy", "-movflags", "+faststart", str(dest.resolve())]
 
-    res = subprocess.run(args, capture_output=True, text=True)
+    res = subprocess.run(args, capture_output=True, text=True, cwd=str(seg_dir))
     if res.returncode != 0:
         raise VideoError(f"assembling the final file failed: {res.stderr.strip()[:400]}")

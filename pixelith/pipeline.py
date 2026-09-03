@@ -15,6 +15,7 @@ from typing import Callable
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
+from . import compat  # registers the HEIF opener as a side effect
 from .config import LARGE_IMAGE_PIXELS, MODELS, PRESETS, UpscaleSettings
 from .engine import Engine
 

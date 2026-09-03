@@ -69,6 +69,45 @@ def choose_providers(
     return ranked or ["CPUExecutionProvider"]
 
 
+# Measured optimum tile size per execution provider (1080p, compact model,
+# Apple M5 Pro, interleaved A/B runs on an idle machine).
+#
+# The provider does not change *how fast* the machine is nearly as much as the
+# tile size changes it. CPU and CoreML land within noise of each other when each
+# runs at its own best tile (8.5 s vs 8.7 s), but CPU at CoreML's tile size is
+# 30% slower. Threaded CPU kernels want few large tiles; the neural engine wants
+# many small ones.
+_TILE_BY_PROVIDER = {
+    "CPUExecutionProvider": 512,
+    "CoreMLExecutionProvider": 192,
+    "CUDAExecutionProvider": 512,     # untested; large tiles suit GPU batching
+    "DmlExecutionProvider": 384,      # untested
+    "ROCMExecutionProvider": 512,     # untested
+}
+
+
+def pick_tile(provider: str, spec: "ModelSpec", ram_bytes: int | None = None) -> int:
+    """Best tile size for this provider, reduced when memory is tight.
+
+    Tiles are the main memory lever on low-end machines: a tile of T pixels
+    holds T*scale squared floats while it is in flight, on top of the
+    whole-image accumulator.
+    """
+    from .compat import total_ram_bytes
+
+    tile = _TILE_BY_PROVIDER.get(provider, spec.default_tile)
+    ram = ram_bytes if ram_bytes is not None else total_ram_bytes()
+    gb = ram / 1024**3
+    if gb < 4:
+        tile = min(tile, 192)
+    elif gb < 8:
+        tile = min(tile, 256)
+    # Deep models hold far more activation memory per tile than compact ones.
+    if spec.cost > 3:
+        tile = min(tile, 256)
+    return max(64, tile)
+
+
 def _feather(size: int, overlap: int) -> np.ndarray:
     """A 1-D ramp that rises over `overlap`, holds at 1, then falls."""
     w = np.ones(size, dtype=np.float32)
@@ -121,7 +160,8 @@ class Engine:
 
         self.provider = self.session.get_providers()[0]
         self.input_name = self.session.get_inputs()[0].name
-        self.tile = int(self.settings.tile or spec.default_tile)
+        # An explicit --tile always wins; otherwise adapt to provider and RAM.
+        self.tile = int(self.settings.tile or pick_tile(self.provider, spec))
         self.overlap = max(0, int(self.settings.overlap))
         if self.overlap * 2 >= self.tile:
             self.overlap = max(0, self.tile // 8)

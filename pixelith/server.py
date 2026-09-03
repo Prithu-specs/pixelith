@@ -17,7 +17,8 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .config import MODELS, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import available_providers, choose_providers
-from .jobs import MANAGER, classify
+from .compat import summary as platform_summary
+from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
 from .models import status as model_status
 from .pipeline import estimate_seconds, human_time, plan
 from .video import have_ffmpeg
@@ -56,6 +57,13 @@ def health() -> dict:
         "active": {k: choose_providers(spec=s)[0] for k, s in MODELS.items()},
         # Published so clients can reject a file before spending an upload on it.
         "max_upload_bytes": MAX_UPLOAD_BYTES,
+        # Advertise only what this install can actually decode. HEIC needs the
+        # optional pillow-heif plugin, and video needs FFmpeg on PATH.
+        "formats": {
+            "image": sorted(IMAGE_SUFFIXES),
+            "video": sorted(VIDEO_SUFFIXES) if have_ffmpeg() else [],
+        },
+        "platform": platform_summary(),
     }
 
 
