@@ -1,22 +1,62 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
-# commercial use requires a separate licence. See LICENSE.
+# SPDX-License-Identifier: LicenseRef-Pixelith-EULA-1.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for personal use within the
+# stated allowance; beyond it, and for all commercial use, a paid licence
+# is required. See LICENSE.
 """Pixelith - AI image and video upscaling, up to 8K."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Licensing identity. Surfaced by the CLI, the HTTP API and the web UI so that
 # anyone running Pixelith is on notice about the terms, not just anyone who
 # happens to open the LICENSE file.
-LICENSE_ID = "PolyForm-Noncommercial-1.0.0"
-LICENSE_NAME = "PolyForm Noncommercial License 1.0.0"
-LICENSE_URL = "https://polyformproject.org/licenses/noncommercial/1.0.0"
+LICENSE_ID = "LicenseRef-Pixelith-EULA-1.0"
+LICENSE_NAME = "Pixelith End User Licence Agreement 1.0"
+LICENSE_URL = "https://github.com/Prithu-specs/pixelith/blob/main/LICENSE"
 LICENSOR = "PGA Tech Solutions"
 COPYRIGHT = "Copyright (c) 2026 PGA Tech Solutions"
 COMMERCIAL_CONTACT = "licensing@pgatech.solutions"
 REQUIRED_NOTICE = (
     "Required Notice: Copyright (c) 2026 PGA Tech Solutions "
     "(https://github.com/Prithu-specs/pixelith)"
+)
+
+# Versions 0.1.x shipped under PolyForm Noncommercial 1.0.0. Rights granted for
+# those versions stand; these terms apply from 0.2.0 onward.
+PRIOR_LICENSE = "PolyForm-Noncommercial-1.0.0 (versions 0.1.x)"
+
+# The free allowance. Nothing in the Software measures or enforces these - see
+# clause 7 of the LICENCE. They are stated so users know where the line is.
+FREE_VIDEO_BYTES = 1_073_741_824       # 1 GB of video input
+FREE_IMAGE_COUNT = 100                 # 100 still images
+
+TIERS = (
+    {
+        "key": "free",
+        "name": "Free",
+        "price_usd": 0,
+        "use": "personal",
+        "images": FREE_IMAGE_COUNT,
+        "video_bytes": FREE_VIDEO_BYTES,
+        "summary": "Personal use, up to 100 images and 1 GB of video input.",
+    },
+    {
+        "key": "personal",
+        "name": "Personal",
+        "price_usd": 10,
+        "use": "personal",
+        "images": None,
+        "video_bytes": None,
+        "summary": "One person, all their devices. Unlimited images and video, for life.",
+    },
+    {
+        "key": "commercial",
+        "name": "Commercial",
+        "price_usd": 200,
+        "use": "commercial",
+        "images": None,
+        "video_bytes": None,
+        "summary": "One company. Any commercial use, unlimited, for life.",
+    },
 )
 
 
@@ -28,7 +68,15 @@ def license_info() -> dict:
         "url": LICENSE_URL,
         "licensor": LICENSOR,
         "copyright": COPYRIGHT,
-        "noncommercial": True,
         "commercial_contact": COMMERCIAL_CONTACT,
         "required_notice": REQUIRED_NOTICE,
+        "prior_license": PRIOR_LICENSE,
+        "free_allowance": {
+            "images": FREE_IMAGE_COUNT,
+            "video_bytes": FREE_VIDEO_BYTES,
+        },
+        "tiers": [dict(t) for t in TIERS],
+        # Stated for transparency: the Software does not measure or enforce any
+        # of the above. See clause 7 of the LICENCE.
+        "enforced_in_software": False,
     }

@@ -12,7 +12,8 @@ It is deliberately small: two models, one HTTP API, one static web page, and an
 honest set of numbers about how long things take.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB)
-![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange)
+![License: Pixelith EULA 1.0](https://img.shields.io/badge/license-Pixelith%20EULA%201.0-orange)
+![Free tier: 100 images + 1 GB video](https://img.shields.io/badge/free%20tier-100%20images%20%2B%201%20GB%20video-brightgreen)
 ![Runtime: ONNX Runtime](https://img.shields.io/badge/runtime-ONNX%20Runtime-5C6BC0)
 ![Providers](https://img.shields.io/badge/providers-CUDA%20%7C%20CoreML%20%7C%20DirectML%20%7C%20CPU-607D8B)
 ![Inference: 100% local](https://img.shields.io/badge/inference-100%25%20local-2E7D32)
@@ -731,47 +732,70 @@ recognised if your ONNX Runtime build provides it, but it is untested here.
 ## License
 
 Pixelith is **copyright &copy; 2026 PGA Tech Solutions** and is licensed under the
-[**PolyForm Noncommercial License 1.0.0**](LICENSE)
-(SPDX: `PolyForm-Noncommercial-1.0.0`).
+[**Pixelith End User Licence Agreement 1.0**](LICENSE)
+(SPDX: `LicenseRef-Pixelith-EULA-1.0`).
 
-PGA Tech Solutions is the licensor. Commercial licences are granted by PGA Tech
-Solutions and by no one else.
+It is **source-available, not open source**. You can read the code, study it and
+modify it for your own use. Reading it does not grant rights beyond the licence.
 
-### License, in plain English
+### Pricing
 
-**You may use Pixelith freely, at no cost, for any non-commercial purpose.**
-That covers, explicitly:
+| Tier | Price | Covers |
+|---|---|---|
+| **Free** | &mdash; | Personal use, up to **100 images** and **1 GB of video input** |
+| **Personal** | **$10** once | One person, all their devices. Unlimited images and video, for life |
+| **Commercial** | **$200** once | One company. Any commercial use, unlimited, for life |
 
-- Personal projects, hobby work, and your own photos and videos
-- Learning, teaching, coursework, and academic research
-- Experimentation and testing
-- Use by charities, schools, universities, public research bodies, public safety
-  and health organisations, environmental organisations, and government bodies —
-  regardless of how they are funded
+Both paid tiers are one-time payments. There is nothing to renew, no
+subscription, and no expiry.
 
-You may modify it, build on it, and share it, as long as your use stays
-non-commercial and you pass this licence along with it.
+**The two free allowances are independent.** Reaching 100 images does not consume
+your video allowance, and vice versa. A single paid licence removes both &mdash;
+there is no separate charge for images and video.
 
-**What is not covered:** using Pixelith as part of a business, in commercial
-production work, in client deliverables, in a paid product or service, or in
-anything with an anticipated commercial application. Internal use inside a
-company counts as commercial even if you never sell the output.
+**Charities, schools, universities, public research bodies, public health and
+safety organisations, and government bodies count as personal use**, regardless
+of how they are funded.
 
-### Commercial licensing
+**Commercial use needs a licence from the first byte.** There is no free
+commercial allowance. Using Pixelith inside a business counts as commercial even
+if you never sell the output.
 
-If you want to use Pixelith commercially, that is available — it just needs an
-actual agreement rather than an assumption.
+### What the free tier is really worth
 
-**Contact: [licensing@pgatech.solutions](mailto:licensing@pgatech.solutions)**
+The video allowance is more generous than it sounds, because compute time is the
+real ceiling, not bytes:
 
-Please include what you want to build, roughly what volume, and whether you need
-to redistribute Pixelith or only run it yourself. The answer is not automatically
-no.
+| Your source | 1 GB is about | Time to upscale it to 8K |
+|---|---|---|
+| Phone 1080p | 8 minutes | ~34 hours |
+| Phone 4K | 3 minutes | ~13 hours |
+| Screen recording | 45 minutes | ~193 hours |
+
+Most personal users will never reach the limit, because they would need to leave
+the machine running for weeks first. If you do reach it, $10 is not a lot to ask.
+
+### Nothing here is enforced in software
+
+Pixelith contains **no licence key check, no usage metering, no activation and no
+telemetry**. It never contacts us and never reports what you process. That is
+deliberate: it is what makes it trustworthy for the people using it for free, and
+it is not going to change.
+
+Which means the allowance rests on your honesty. If Pixelith is worth more to you
+than the free tier allows, paying for it is how it continues to exist.
+
+### Buying a licence
+
+**[licensing@pgatech.solutions](mailto:licensing@pgatech.solutions)**
+
+Tell us which tier you need. For commercial enquiries it helps to say what you
+are building and whether you need to redistribute Pixelith or only run it.
 
 ### If you redistribute Pixelith
 
-The licence obliges you to pass on both the terms and the licensor's required
-notice. Keep this line intact, exactly as it appears at the top of
+Redistribution needs our written permission (clause 5.2). Where granted, you must
+pass on both the licence and this notice, exactly as it appears at the top of
 [`LICENSE`](LICENSE):
 
 ```
@@ -779,35 +803,29 @@ Required Notice: Copyright (c) 2026 PGA Tech Solutions
 (https://github.com/Prithu-specs/pixelith)
 ```
 
-Stripping that notice, or the copyright headers in the source files, is itself a
-breach of the licence — it is the mechanism by which downstream users are put on
-notice, so it is treated seriously.
+Removing that notice, or the copyright headers in the source files, is a breach
+in itself &mdash; it is how the next person downstream learns the terms apply.
 
-### Two things to be aware of
+### Three things to be aware of
 
-1. **This is not an OSI-approved open-source licence.** PolyForm Noncommercial
-   restricts a field of use, which is incompatible with the Open Source
-   Definition. GitHub will label this repository accordingly (or as
-   "unrecognised"), and Debian, Fedora, Homebrew core, conda-forge and most other
-   distribution channels will not package it. That is expected, and it is the
-   deliberate trade for keeping the software free for everyone who is not
-   selling something.
-2. **The licence covers Pixelith's own code only.** Model weights, ONNX Runtime,
-   FFmpeg, and the Python libraries all carry their own terms — see
-   [`NOTICE.md`](NOTICE.md). Nothing here imposes Pixelith's noncommercial
-   restriction on anyone else's work. In particular the Real-ESRGAN weights are
-   BSD 3-Clause and remain freely usable commercially in their own right; what
-   requires a licence from PGA Tech Solutions is Pixelith — the engine, the
-   pipeline, the server, the interface and the tooling around them.
-3. **A licence is a legal instrument, not a technical lock.** Pixelith runs
-   entirely on the user's own machine and does not phone home, check a key, or
-   report usage — deliberately, because that is what makes it trustworthy for
-   the people it is free for. Compliance rests on the notice being clear and on
-   PGA Tech Solutions' ability to act on a breach, not on the software policing
-   anyone.
+1. **Versions 0.1.x were released under PolyForm Noncommercial 1.0.0.** Those
+   rights are not withdrawn and still apply to those versions; the text is kept
+   in the repository as
+   [`LICENSE-0.1.x-PolyForm-Noncommercial-1.0.0.txt`](LICENSE-0.1.x-PolyForm-Noncommercial-1.0.0.txt).
+   The terms above apply from **0.2.0** onward.
+2. **This is not an open-source licence.** It restricts commercial use, so code
+   hosts will label the repository accordingly and Linux distributions and
+   package managers will not redistribute it. That is the deliberate trade for
+   keeping it free for everyone who is not selling something.
+3. **The licence covers Pixelith's own code only.** Model weights, ONNX Runtime,
+   FFmpeg and the Python libraries carry their own terms &mdash; see
+   [`NOTICE.md`](NOTICE.md). In particular the Real-ESRGAN weights are BSD
+   3-Clause and remain freely usable commercially in their own right. What needs
+   a licence from PGA Tech Solutions is Pixelith: the engine, the pipeline, the
+   server, the interface and the tooling around them.
 
-The plain-English summary above is a convenience, not a substitute. The
-[`LICENSE`](LICENSE) file is what governs.
+The summary above is a convenience. The [`LICENSE`](LICENSE) file is what
+governs.
 
 ---
 

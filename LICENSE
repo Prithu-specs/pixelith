@@ -1,134 +1,221 @@
+Pixelith End User Licence Agreement
+Version 1.0 — effective 3 September 2026
+
+Copyright (c) 2026 PGA Tech Solutions. All rights reserved.
+
 Required Notice: Copyright (c) 2026 PGA Tech Solutions
 (https://github.com/Prithu-specs/pixelith)
 
-# PolyForm Noncommercial License 1.0.0
+This is a licence agreement between you and PGA Tech Solutions ("we", "us")
+for the Pixelith software ("the Software"). By installing, running or copying
+the Software you accept these terms. If you do not accept them, do not use the
+Software.
 
-<https://polyformproject.org/licenses/noncommercial/1.0.0>
+The Software is source-available, not open source. Seeing the source code does
+not grant you rights beyond those set out below.
 
-## Acceptance
 
-In order to get any license under these terms, you must agree
-to them as both strict obligations and conditions to all
-your licenses.
+1. DEFINITIONS
 
-## Copyright License
+1.1  "Personal Use" means use by an individual for their own private purposes,
+     including hobby projects, personal photos and video, learning, coursework
+     and unpaid personal creative work.
 
-The licensor grants you a copyright license for the
-software to do everything you might do with the software
-that would otherwise infringe the licensor's copyright
-in it for any permitted purpose.  However, you may
-only distribute the software according to [Distribution
-License](#distribution-license) and make changes or new works
-based on the software according to [Changes and New Works
-License](#changes-and-new-works-license).
+1.2  "Commercial Use" means any use in, for, or on behalf of a business,
+     organisation or professional practice. It includes, without limitation:
+     use inside a company even where nothing is sold; freelance or client work
+     you invoice for; producing material for a paid product, service or
+     subscription; and any use with an anticipated commercial application.
 
-## Distribution License
+1.3  "Charitable and Academic Use" means use by a registered charity, school,
+     college, university, public research body, public health or safety
+     organisation, or government body, for its own non-revenue purposes.
+     Charitable and Academic Use is treated as Personal Use under this
+     agreement, regardless of how the organisation is funded, and is not
+     Commercial Use.
 
-The licensor grants you an additional copyright license
-to distribute copies of the software.  Your license
-to distribute covers distributing the software with
-changes and new works permitted by [Changes and New Works
-License](#changes-and-new-works-license).
+1.4  "Video Input Volume" means the cumulative total file size of all video
+     files you submit to the Software for processing, measured across all time
+     and all devices, and counted once per file processed.
 
-## Notices
+1.5  "Still Images" means single-frame image files. Still Images do not count
+     toward Video Input Volume.
 
-You must ensure that anyone who gets a copy of any part of
-the software from you also gets a copy of these terms or the
-URL for them above, as well as copies of any plain-text lines
-beginning with `Required Notice:` that the licensor provided
-with the software.  For example:
+1.6  "Image Count" means the cumulative total number of Still Images you submit
+     to the Software for processing, measured across all time and all devices,
+     and counted once per image processed.
 
-> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
+1.7  "Third-Party Components" means the software and neural-network model
+     weights authored by others and distributed with, or downloaded by, the
+     Software. These are listed in NOTICE.md.
 
-## Changes and New Works License
 
-The licensor grants you an additional copyright license to
-make changes and new works based on the software for any
-permitted purpose.
+2. THE FREE TIER
 
-## Patent License
+2.1  We grant you a perpetual, worldwide, royalty-free, non-exclusive,
+     non-transferable licence to install and run the Software for Personal Use,
+     at no charge, within both of the following allowances:
 
-The licensor grants you a patent license for the software that
-covers patent claims the licensor can license, or becomes able
-to license, that you would infringe by using the software.
+     (a) a Video Input Volume of up to 1 gigabyte (1 GB, being 1,073,741,824
+         bytes); and
+     (b) an Image Count of up to 100 Still Images.
 
-## Noncommercial Purposes
+2.2  The two allowances are independent. Exceeding one does not consume the
+     other: you may reach 100 images while still having video allowance left,
+     and the reverse.
 
-Any noncommercial purpose is a permitted purpose.
+2.3  Once you exceed either allowance, continued processing of that kind
+     requires a Personal Licence under clause 3 or a Commercial Licence under
+     clause 4. Your existing outputs remain yours and are unaffected, and you
+     may continue to use the Software within any allowance you have not yet
+     exhausted.
 
-## Personal Uses
+2.4  The Free Tier does not permit Commercial Use in any volume. Commercial Use
+     requires a Commercial Licence from the first byte.
 
-Personal use for research, experiment, and testing for
-the benefit of public knowledge, personal study, private
-entertainment, hobby projects, amateur pursuits, or religious
-observance, without any anticipated commercial application,
-is use for a permitted purpose.
 
-## Noncommercial Organizations
+3. PERSONAL LICENCE — US$10, ONE-TIME
 
-Use by any charitable organization, educational institution,
-public research organization, public safety or health
-organization, environmental protection organization,
-or government institution is use for a permitted purpose
-regardless of the source of funding or obligations resulting
-from the funding.
+3.1  On payment of a one-time fee of US$10 we grant you a perpetual, worldwide,
+     royalty-free, non-exclusive, non-transferable licence to install and run
+     the Software for Personal Use with no limit on Video Input Volume and no
+     limit on Image Count. A single Personal Licence removes both allowances;
+     there is no separate charge for images and video.
 
-## Fair Use
+3.2  A Personal Licence is granted to one named individual. That individual may
+     install and run the Software on any number of devices that they own or
+     personally control. The licence follows the person, not the machine.
 
-You may have "fair use" rights for the software under the
-law. These terms do not limit them.
+3.3  A Personal Licence is perpetual for the version series it is purchased
+     under and all later releases we make available under these terms. It does
+     not expire, is not a subscription, and requires no renewal.
 
-## No Other Rights
+3.4  A Personal Licence does not permit Commercial Use.
 
-These terms do not allow you to sublicense or transfer any of
-your licenses to anyone else, or prevent the licensor from
-granting licenses to anyone else.  These terms do not imply
-any other licenses.
 
-## Patent Defense
+4. COMMERCIAL LICENCE — US$200, ONE-TIME
 
-If you make any written claim that the software infringes or
-contributes to infringement of any patent, your patent license
-for the software granted under these terms ends immediately. If
-your company makes such a claim, your patent license ends
-immediately for work on behalf of your company.
+4.1  On payment of a one-time fee of US$200 we grant you a perpetual,
+     worldwide, royalty-free, non-exclusive, non-transferable licence to
+     install and run the Software for Commercial Use with no limit on Video
+     Input Volume and no limit on Image Count. As with clause 3.1, a single
+     Commercial Licence removes both allowances.
 
-## Violations
+4.2  A Commercial Licence is granted to one legal entity and covers that
+     entity's employees and contractors acting on its behalf, on any number of
+     devices, for that entity's own work. It does not extend to a parent,
+     subsidiary or affiliated company, each of which requires its own licence.
 
-The first time you are notified in writing that you have
-violated any of these terms, or done anything with the software
-not covered by your licenses, your licenses can nonetheless
-continue if you come into full compliance with these terms,
-and take practical steps to correct past violations, within
-32 days of receiving notice.  Otherwise, all your licenses
-end immediately.
+4.3  A Commercial Licence is perpetual on the same basis as clause 3.3.
 
-## No Liability
+4.4  A Commercial Licence covers using the Software to produce work. It does
+     not permit redistributing, reselling, sublicensing or hosting the Software
+     itself as a product or service to third parties. For that, contact us.
 
-***As far as the law allows, the software comes as is, without
-any warranty or condition, and the licensor will not be liable
-to you for any damages arising out of these terms or the use
-or nature of the software, under any kind of legal claim.***
 
-## Definitions
+5. WHAT ALL TIERS ALLOW AND FORBID
 
-The **licensor** is the individual or entity offering these
-terms, and the **software** is the software the licensor makes
-available under these terms.
+5.1  Under any tier you may modify the Software for your own use, and study its
+     source code.
 
-**You** refers to the individual or entity agreeing to these
-terms.
+5.2  Under no tier may you:
+     (a) remove, obscure or alter the Required Notice above, the copyright
+         headers in the source files, or the licence notices shown by the
+         Software;
+     (b) redistribute, resell, sublicense, rent or host the Software as a
+         product or service to third parties without our separate written
+         permission;
+     (c) represent the Software as your own work, or use the name "Pixelith" or
+         "PGA Tech Solutions" to endorse or promote your own products without
+         our written permission.
 
-**Your company** is any legal entity, sole proprietorship,
-or other kind of organization that you work for, plus all
-organizations that have control over, are under the control of,
-or are under common control with that organization.  **Control**
-means ownership of substantially all the assets of an entity,
-or the power to direct its management and policies by vote,
-contract, or otherwise.  Control can be direct or indirect.
+5.3  If you redistribute the Software with our permission under clause 5.2(b),
+     you must pass on both this agreement and the Required Notice.
 
-**Your licenses** are all the licenses granted to you for the
-software under these terms.
 
-**Use** means anything you do with the software requiring one
-of your licenses.
+6. THIRD-PARTY COMPONENTS
+
+6.1  This agreement covers the Software itself: its upscaling engine, video
+     pipeline, server, interface and surrounding tooling.
+
+6.2  It does not cover the Third-Party Components, which remain governed by
+     their own licences. In particular the neural-network weights are
+     Real-ESRGAN, copyright (c) 2021 Xintao Wang, licensed under the BSD
+     3-Clause licence, and remain freely usable commercially in their own
+     right. Nothing in this agreement restricts anyone else's work.
+
+
+7. HONESTY, NOT ENFORCEMENT
+
+7.1  The Software runs entirely on your own hardware. It contains no licence
+     key check, no usage metering, no activation and no telemetry. It does not
+     contact us, and it does not report what you process. This is deliberate:
+     it is what makes the Software trustworthy for the people using it for
+     free.
+
+7.2  Compliance with the allowances in clause 2.1 therefore rests on you. We
+     have chosen to trust our users rather than police them. If the Software is
+     worth more to you than the limit allows, the fee is small and paying it is
+     how this continues to exist.
+
+
+8. VERSIONS PREVIOUSLY RELEASED
+
+8.1  Pixelith versions 0.1.x were released under the PolyForm Noncommercial
+     License 1.0.0. Rights granted under that licence for those versions are
+     not withdrawn and continue to apply to those versions. The text of that
+     licence is retained in this repository for reference.
+
+8.2  This agreement applies to version 0.2.0 and later.
+
+
+9. NO WARRANTY
+
+9.1  The Software is provided "as is", without warranty of any kind, express or
+     implied, including but not limited to warranties of merchantability,
+     fitness for a particular purpose and non-infringement.
+
+9.2  Upscaling reconstructs plausible detail; it does not recover information
+     that was never captured. We make no representation that any particular
+     output will be fit for any particular purpose.
+
+
+10. LIMITATION OF LIABILITY
+
+10.1 To the maximum extent permitted by law, our total aggregate liability
+     arising out of or in connection with this agreement is limited to the
+     amount you paid us for the Software.
+
+10.2 We are not liable for any indirect, incidental, special or consequential
+     loss, or for loss of data, profits, revenue or goodwill.
+
+10.3 Nothing in this agreement limits liability for death or personal injury
+     caused by negligence, for fraud, or for any other liability that cannot
+     lawfully be limited.
+
+
+11. TERMINATION
+
+11.1 This licence terminates automatically if you materially breach it and do
+     not remedy the breach within 30 days of us notifying you.
+
+11.2 On termination you must stop using the Software and delete your copies.
+     Outputs you have already produced remain yours.
+
+
+12. GENERAL
+
+12.1 This agreement is the entire agreement between us regarding the Software
+     and supersedes any prior understanding.
+
+12.2 If any provision is held unenforceable, the remainder continues in force.
+
+12.3 Governing law and jurisdiction: [TO BE COMPLETED BY PGA TECH SOLUTIONS —
+     insert the country or state whose law governs, and the courts that have
+     jurisdiction. This must match where PGA Tech Solutions is established.]
+
+
+CONTACT
+
+Licensing and purchases:  licensing@pgatech.solutions
+Source and issues:        https://github.com/Prithu-specs/pixelith

@@ -1,6 +1,7 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
-# commercial use requires a separate licence. See LICENSE.
+# SPDX-License-Identifier: LicenseRef-Pixelith-EULA-1.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for personal use within the
+# stated allowance; beyond it, and for all commercial use, a paid licence
+# is required. See LICENSE.
 """Command line interface: `python -m pixelith ...`"""
 from __future__ import annotations
 
@@ -66,8 +67,11 @@ def cmd_info(args: argparse.Namespace) -> int:
     print(f"  HEIC/HEIF  : {'yes' if info['heic'] else 'no (pip install pillow-heif)'}")
     print(f"  providers  : {', '.join(available_providers())}")
     lic = license_info()
+    free = lic["free_allowance"]
     print(f"  license    : {lic['name']}")
-    print(f"               {lic['copyright']} - noncommercial use only")
+    print(f"               free for personal use up to {free['images']} images "
+          f"and {free['video_bytes'] // 1024**3} GB of video")
+    print("               run 'pixelith license' for the full terms")
     print("\nModels:")
     for m in model_status():
         spec = MODELS[m["key"]]
@@ -80,21 +84,37 @@ def cmd_info(args: argparse.Namespace) -> int:
 
 
 def cmd_license(args: argparse.Namespace) -> int:
+    from . import TIERS
+
     lic = license_info()
-    print(f"{lic['name']}  ({lic['spdx']})")
+    print(f"{lic['name']}")
     print(f"{lic['copyright']}")
     print()
-    print("Free of charge for personal, hobby, educational, research and other")
-    print("noncommercial use. Any use in or for a business - including internal")
-    print("company use and paid services built on it - requires a separate")
-    print(f"commercial licence from {lic['licensor']}.")
+    print(f"  {'Tier':<12} {'Price':>7}   What it covers")
+    print(f"  {'-' * 12} {'-' * 7}   {'-' * 46}")
+    for t in TIERS:
+        price = "free" if t["price_usd"] == 0 else f"${t['price_usd']}"
+        print(f"  {t['name']:<12} {price:>7}   {t['summary']}")
+    print()
+    print("The free allowance is 100 still images and 1 GB of video input.")
+    print("The two are independent - running out of one does not consume the")
+    print("other. A single paid licence removes both, permanently; there is no")
+    print("separate charge for images and video, and nothing to renew.")
+    print()
+    print("Charities, schools, universities and public bodies count as personal")
+    print("use, however they are funded.")
+    print()
+    print("Pixelith does not measure or enforce any of this. There is no key")
+    print("check, no metering and no telemetry - it runs entirely on your")
+    print("machine. The limits rest on your honesty, deliberately.")
     print()
     print(f"  Full terms       {lic['url']}")
-    print(f"  Commercial use   {lic['commercial_contact']}")
+    print(f"  Buy a licence    {lic['commercial_contact']}")
     print()
-    print("The bundled neural network weights are third-party works under the")
-    print("BSD 3-Clause licence and are not covered by the terms above; see")
-    print("NOTICE.md.")
+    print("Bundled model weights are third-party works under the BSD 3-Clause")
+    print("licence and are not covered by these terms; see NOTICE.md.")
+    print(f"Versions 0.1.x were released under {lic['prior_license'].split(' (')[0]}")
+    print("and keep those rights.")
     return 0
 
 

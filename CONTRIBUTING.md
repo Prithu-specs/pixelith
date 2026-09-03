@@ -9,11 +9,11 @@ means here.
 ## Licensing of contributions
 
 Pixelith is copyright &copy; 2026 PGA Tech Solutions and is released under the
-[PolyForm Noncommercial License 1.0.0](LICENSE). PGA Tech Solutions also sells
+[Pixelith End User Licence Agreement 1.0](LICENSE). PGA Tech Solutions also sells
 commercial licences to organisations that fall outside those terms.
 
 That second part is why this section exists. If contributors kept copyright in
-their patches under noncommercial-only terms, nobody — including PGA Tech
+their patches under personal-tier-only terms, nobody — including PGA Tech
 Solutions — could grant a commercial licence covering the whole work, and the
 project would quietly become unlicensable.
 
@@ -230,7 +230,7 @@ form rather than opening a public issue.
 
 ## Licensing of contributions
 
-Pixelith is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE),
+Pixelith is licensed under the [Pixelith End User Licence Agreement 1.0](LICENSE),
 which is **not** an OSI-approved open-source licence. Please make sure you are
 comfortable with that before contributing.
 
@@ -240,7 +240,7 @@ that it is your own work, or that you have permission, and that your employer
 has no claim on it that would conflict.
 
 One thing worth stating plainly rather than burying: because the project offers
-commercial licences separately for use the PolyForm licence does not permit, the
+commercial licences separately for use the free tier does not permit, the
 maintainers may include contributed code under those commercial terms. If that
 is not acceptable to you, please say so on the issue before you write the code
 rather than after.

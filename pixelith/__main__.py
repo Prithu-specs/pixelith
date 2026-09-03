@@ -1,6 +1,7 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-# Copyright (c) 2026 PGA Tech Solutions. Free for noncommercial use;
-# commercial use requires a separate licence. See LICENSE.
+# SPDX-License-Identifier: LicenseRef-Pixelith-EULA-1.0
+# Copyright (c) 2026 PGA Tech Solutions. Free for personal use within the
+# stated allowance; beyond it, and for all commercial use, a paid licence
+# is required. See LICENSE.
 import sys
 from .cli import main
 

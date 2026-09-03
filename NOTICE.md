@@ -1,7 +1,7 @@
 # Third-party notices
 
 Pixelith is copyright **&copy; 2026 PGA Tech Solutions** and its own source code
-is licensed under the **PolyForm Noncommercial License 1.0.0**
+is licensed under the **Pixelith End User Licence Agreement 1.0**
 (see [`LICENSE`](LICENSE)). That licence covers only the code in this
 repository. Commercial licences are available from PGA Tech Solutions at
 licensing@pgatech.solutions.
@@ -9,7 +9,7 @@ licensing@pgatech.solutions.
 It does **not** cover the third-party software Pixelith depends on, and it does
 **not** cover the neural-network weights Pixelith downloads at runtime. Those
 carry their own licences, reproduced or referenced below. Where a third-party
-licence is more permissive than PolyForm Noncommercial, the third-party terms
+licence is more permissive than the Pixelith EULA, the third-party terms
 govern that component — Pixelith's noncommercial restriction is not imposed on
 anyone else's work.
 
