@@ -117,13 +117,14 @@ not grant you rights beyond those set out below.
 
 4A. REGIONAL PRICING, TAX AND CURRENCY
 
-4A.1 PGA Tech Solutions is established in India. Prices in rupees are for
+4A.1 PGA Tech Solutions is a sole proprietorship established in India
+     (Uttar Pradesh, GSTIN 09AIAPG7383C1ZE). Prices in rupees are for
      buyers in India; prices in US dollars are for buyers elsewhere. Which
      applies is determined by where you, or the organisation taking the
      licence, are established - not by the payment method you happen to use.
 
 4A.2 Indian sales are made by PGA Tech Solutions directly. PGA Tech Solutions
-     is registered for GST in India (GSTIN: [INSERT GSTIN]). Prices shown in
+     is registered for GST in India (GSTIN: 09AIAPG7383C1ZE). Prices shown in
      rupees are inclusive of GST at the applicable rate, currently 18% on
      software licences (SAC 997331). A tax invoice showing the GST charged is
      issued for every Indian sale.
@@ -264,12 +265,17 @@ not grant you rights beyond those set out below.
 
 12.2 If any provision is held unenforceable, the remainder continues in force.
 
-12.3 Governing law and jurisdiction: [TO BE COMPLETED BY PGA TECH SOLUTIONS —
-     insert the country or state whose law governs, and the courts that have
-     jurisdiction. This must match where PGA Tech Solutions is established.]
+12.3 This agreement is governed by the laws of India. The courts at
+     [INSERT CITY], Uttar Pradesh have exclusive jurisdiction over any dispute
+     arising from it, save that either party may seek injunctive relief in any
+     court of competent jurisdiction to protect its intellectual property.
 
 
 CONTACT
+
+PGA Tech Solutions
+Sole proprietorship, Uttar Pradesh, India
+GSTIN 09AIAPG7383C1ZE
 
 Licensing and purchases:  licensing@pgatech.solutions
 Source and issues:        https://github.com/Prithu-specs/pixelith

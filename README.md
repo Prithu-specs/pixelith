@@ -748,10 +748,11 @@ modify it for your own use. Reading it does not grant rights beyond the licence.
 
 One-time payments. Nothing to renew, no subscription, no expiry.
 
-Pixelith is made by PGA Tech Solutions in India. **Rupee prices include 18% GST**
+Pixelith is made by PGA Tech Solutions, a sole proprietorship in Uttar Pradesh,
+India (GSTIN `09AIAPG7383C1ZE`). **Rupee prices include 18% GST** (SAC 997331)
 and a tax invoice is issued; prices elsewhere are exclusive of local tax, which is
-added at checkout. Which price applies depends on where you or your organisation
-are established.
+added at checkout and are exports of service zero-rated under LUT. Which price
+applies depends on where you or your organisation are established.
 
 **The two free allowances are independent.** Reaching 100 images does not consume
 your video allowance, and vice versa. A single paid licence removes both &mdash;

@@ -123,14 +123,44 @@ def test_export_sales_are_described_as_zero_rated():
     assert "zero-rated" in licence and "Letter of Undertaking" in licence
 
 
-def test_gstin_placeholder_is_flagged_until_filled_in():
-    licence = licence_text()
-    if "[INSERT GSTIN]" in licence:
-        pytest.skip(
-            "GSTIN placeholder still in LICENSE - PGA Tech Solutions must "
-            "insert the real GST number before issuing Indian tax invoices"
-        )
-    assert "GSTIN" in licence
+_GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _gstin_checksum_ok(gstin: str) -> bool:
+    """The 15th character is a weighted checksum over the first 14."""
+    if len(gstin) != 15 or any(c not in _GST_CHARS for c in gstin):
+        return False
+    total = 0
+    for i, ch in enumerate(gstin[:14]):
+        product = _GST_CHARS.index(ch) * (1 if i % 2 == 0 else 2)
+        total += product // 36 + product % 36
+    return gstin[14] == _GST_CHARS[(36 - total % 36) % 36]
+
+
+def test_gstin_is_present_and_passes_its_checksum():
+    """A mistyped GSTIN on a tax invoice is a real compliance problem."""
+    assert pixelith.GSTIN, "GSTIN is not set"
+    assert _gstin_checksum_ok(pixelith.GSTIN), (
+        f"{pixelith.GSTIN} fails the GSTIN checksum - it is mistyped"
+    )
+    assert pixelith.GSTIN in licence_text()
+    assert "[INSERT GSTIN]" not in licence_text()
+
+
+def test_gstin_state_code_matches_the_stated_state():
+    assert pixelith.GSTIN.startswith("09")          # 09 = Uttar Pradesh
+    assert pixelith.GST_STATE == "Uttar Pradesh"
+    assert "Uttar Pradesh" in licence_text()
+
+
+def test_the_checksum_helper_actually_rejects_bad_numbers():
+    """Guard the guard: a broken validator would pass anything."""
+    good = pixelith.GSTIN
+    assert _gstin_checksum_ok(good)
+    bad = good[:14] + ("A" if good[14] != "A" else "B")
+    assert not _gstin_checksum_ok(bad)
+    assert not _gstin_checksum_ok("09AIAPG7383C1Z")      # too short
+    assert not _gstin_checksum_ok("")
 
 
 def test_regional_pricing_is_exposed_to_clients():
@@ -196,12 +226,13 @@ def test_prior_polyform_rights_are_preserved():
     assert "0.1.x were released under the PolyForm" in licence_text()
 
 
-def test_governing_law_placeholder_is_visible_until_filled_in():
-    """Fails loudly rather than shipping an agreement with no jurisdiction."""
+def test_governing_law_is_set_and_the_venue_is_complete():
+    """India is settled; the city for the courts clause is not."""
     licence = licence_text()
-    if "[TO BE COMPLETED" in licence:
+    assert "governed by the laws of India" in licence
+    if "[INSERT CITY]" in licence:
         pytest.skip(
-            "governing law is still a placeholder - PGA Tech Solutions must "
-            "insert the governing jurisdiction before relying on this agreement"
+            "the courts clause still needs a city - PGA Tech Solutions must "
+            "name the venue in Uttar Pradesh before relying on this agreement"
         )
-    assert "Governing law" in licence
+    assert "exclusive jurisdiction" in licence

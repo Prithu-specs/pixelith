@@ -16,7 +16,8 @@ LICENSOR = "PGA Tech Solutions"
 COPYRIGHT = "Copyright (c) 2026 PGA Tech Solutions"
 COMMERCIAL_CONTACT = "licensing@pgatech.solutions"
 # Shown on Indian tax invoices and the pricing page. Set the real number here.
-GSTIN = _os.environ.get("PIXELITH_GSTIN", "") if (_os := __import__("os")) else ""
+GSTIN = "09AIAPG7383C1ZE"
+GST_STATE = "Uttar Pradesh"
 GST_RATE = 0.18
 GST_SAC = "997331"  # licensing services for the right to use software
 REQUIRED_NOTICE = (
