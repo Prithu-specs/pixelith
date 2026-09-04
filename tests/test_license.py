@@ -273,7 +273,7 @@ def test_beta_is_active_and_dated():
     assert pixelith.BETA is True
     assert pixelith.beta_active() is True
     assert pixelith.BETA_STARTED == "2026-09-04"
-    assert pixelith.BETA_ENDS == "2026-12-04"
+    assert pixelith.BETA_ENDS == "2026-12-05"
     assert pixelith.beta_days_left() > 0
 
 
@@ -282,7 +282,7 @@ def test_beta_window_is_three_months():
 
     start = date(*(int(x) for x in pixelith.BETA_STARTED.split("-")))
     end = date(*(int(x) for x in pixelith.BETA_ENDS.split("-")))
-    assert 89 <= (end - start).days <= 92, "the beta is not about three months"
+    assert (end - start).days == 92, "the beta window is not 92 days"
 
 
 def test_beta_expires_rather_than_running_for_ever():
@@ -295,7 +295,7 @@ def test_beta_expires_rather_than_running_for_ever():
     class After(real):
         @classmethod
         def today(cls):
-            return real(2026, 12, 5)
+            return real(2026, 12, 6)
 
     datetime.date = After
     try:
@@ -308,7 +308,7 @@ def test_licence_documents_the_beta_and_the_end_date():
     """The software suspends the limits; the agreement must say so."""
     licence = licence_text()
     assert "PUBLIC BETA" in licence
-    assert "4 December 2026" in licence
+    assert "5 December 2026" in licence
     assert "allowances in clause 2.1 are suspended" in licence
     assert "no payment mechanism is built into the software" in licence.lower()
     assert "without any retrospective charge" in licence
@@ -320,8 +320,8 @@ def test_beta_is_announced_where_users_will_see_it():
         assert "beta" in text.lower(), f"{path} does not mention the beta"
     # Collapse whitespace: HTML wraps, so the date spans a line break.
     markup = " ".join((ROOT / "web/index.html").read_text().split())
-    assert "4 December 2026" in markup
-    assert "4 December 2026" in " ".join((ROOT / "README.md").read_text().split())
+    assert "5 December 2026" in markup
+    assert "5 December 2026" in " ".join((ROOT / "README.md").read_text().split())
 
 
 def test_the_interface_does_not_claim_it_is_unmetered():

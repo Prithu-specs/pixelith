@@ -14,7 +14,7 @@ __version__ = "0.3.0b1"
 # and no allowance is enforced. Payment goes in once the beta closes.
 BETA = True
 BETA_STARTED = "2026-09-04"
-BETA_ENDS = "2026-12-04"          # three months
+BETA_ENDS = "2026-12-05"          # 92 days
 
 
 def beta_active() -> bool:
