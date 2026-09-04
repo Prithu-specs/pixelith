@@ -17,11 +17,12 @@ static (no build step). All endpoints below are under `/api`.
 ```
 
 ## GET /api/presets
-Returned in ascending order. The interface presents them as a slider, so the
-order of the keys is the order of the steps. `hd` is accepted as an alias for
-`1080p`.
+Returned in slider order, which is **not** sorted by size: `180p` is the fourth
+stop, between `720p` and `1080p`. The order of the keys is the order of the
+steps, so render them as returned rather than sorting. `hd` is accepted as an
+alias for `1080p`.
 ```json
-{"180p":[320,180],"360p":[640,360],"480p":[854,480],"720p":[1280,720],
+{"360p":[640,360],"480p":[854,480],"720p":[1280,720],"180p":[320,180],
  "1080p":[1920,1080],"2k":[2560,1440],"4k":[3840,2160],"6k":[6144,3456],
  "8k":[7680,4320]}
 ```

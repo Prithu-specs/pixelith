@@ -91,13 +91,19 @@ MODELS: dict[str, ModelSpec] = {
 DEFAULT_MODEL = "fast"
 
 # Named output targets. Height is the authoritative axis; width follows aspect.
-# The resolution ladder, ascending. Order matters: the interface presents these
-# as a slider, so the sequence here is the sequence the user scrolls through.
+# The resolution ladder, in the order the slider presents it.
+#
+# This is deliberately NOT sorted by size: 180p sits at the fourth stop, between
+# 720p and 1080p, as specified by PGA Tech Solutions. Dragging right therefore
+# steps down once before continuing up. The interface dims any stop at or below
+# the source resolution, so 180p reads as a downscale wherever it lands.
+#
+# Change this list to change the slider. Nothing else depends on the order.
 PRESETS: dict[str, tuple[int, int]] = {
-    "180p": (320, 180),
     "360p": (640, 360),
     "480p": (854, 480),
     "720p": (1280, 720),
+    "180p": (320, 180),
     "1080p": (1920, 1080),
     "2k": (2560, 1440),
     "4k": (3840, 2160),

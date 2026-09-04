@@ -64,15 +64,37 @@ def test_human_time_pluralisation_never_says_one_seconds():
 # ------------------------------------------------- the resolution ladder --
 
 
-def test_the_ladder_is_ordered_and_complete():
+def test_the_ladder_matches_the_specified_order():
     """The interface renders these as a slider, so order is the step order."""
     from pixelith.config import PRESETS
 
     assert list(PRESETS) == [
-        "180p", "360p", "480p", "720p", "1080p", "2k", "4k", "6k", "8k"
+        "360p", "480p", "720p", "180p", "1080p", "2k", "4k", "6k", "8k"
     ]
+
+
+def test_the_step_down_at_180p_is_intentional():
+    """180p sits fourth by instruction, so the slider steps down once.
+
+    Asserted rather than merely tolerated: sorting the ladder by size looks
+    like an obvious tidy-up, and this records that it is not one.
+    """
+    from pixelith.config import PRESETS
+
     areas = [w * h for w, h in PRESETS.values()]
-    assert areas == sorted(areas), "the slider would jump backwards"
+    assert areas != sorted(areas), "the deliberate step down has been sorted away"
+    names = list(PRESETS)
+    assert names.index("180p") == 3
+    assert names[2] == "720p" and names[4] == "1080p"
+
+
+def test_only_one_step_goes_backwards():
+    """Everything except the 180p stop still ascends."""
+    from pixelith.config import PRESETS
+
+    areas = [w * h for w, h in PRESETS.values()]
+    descents = [i for i in range(1, len(areas)) if areas[i] < areas[i - 1]]
+    assert descents == [3], f"unexpected backward steps at {descents}"
 
 
 def test_every_step_is_16_by_9():

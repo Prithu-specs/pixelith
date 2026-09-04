@@ -375,7 +375,7 @@ def build_parser() -> argparse.ArgumentParser:
     # to a canonical key and are accepted here exactly as the API accepts them.
     u.add_argument("-p", "--preset", type=resolve_preset, choices=list(PRESETS),
                    metavar="{" + ",".join(PRESETS) + "}",
-                   help="target resolution, smallest to largest")
+                   help="target resolution (180p is the fourth stop, by design)")
     u.add_argument("-s", "--scale", type=float, help="scale factor, e.g. 2 or 3.5")
     u.add_argument("--denoise", type=float, default=0.0)
     u.add_argument("--sharpen", type=float, default=0.0)

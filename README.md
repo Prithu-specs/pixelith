@@ -54,7 +54,7 @@ honest set of numbers about how long things take.
   (see [Performance](#performance)).
 - **Seamless tiling.** Overlapping tiles blended with a feathered weight mask, so
   no grid artefacts even on very large images.
-- **Resolution slider** — `180p`, `360p`, `480p`, `720p`, `1080p`, `2k`, `4k`, `6k`, `8k` — or an arbitrary scale factor.
+- **Resolution slider** — `360p`, `480p`, `720p`, `180p`, `1080p`, `2k`, `4k`, `6k`, `8k` — or an arbitrary scale factor.
 - **Web UI and CLI.** A static single-page UI with a before/after comparison, plus
   `python -m pixelith upscale` for scripts.
 - **A time estimator that runs before the job.** `POST /api/estimate` tells you
@@ -277,7 +277,7 @@ python -m pixelith upscale scan.tif --scale 2.0
 |---|---|
 | `-o`, `--output` | Explicit output path. The **extension decides the format** — there is no separate format flag. |
 | `-m`, `--model` | `fast` (default) or `quality` |
-| `-p`, `--preset` | `180p`, `360p`, `480p`, `720p`, `1080p`, `2k`, `4k`, `6k`, `8k` |
+| `-p`, `--preset` | `360p`, `480p`, `720p`, `180p`, `1080p`, `2k`, `4k`, `6k`, `8k` |
 | `-s`, `--scale` | Scale factor, e.g. `2` or `3.5`. Use instead of `--preset`. |
 | `--denoise`, `--sharpen` | Post-process strength, `0.0`–`1.0` |
 | `--quality` | JPEG/WebP encoder quality, default `95` |

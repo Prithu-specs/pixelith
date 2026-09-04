@@ -14,10 +14,11 @@ def test_every_model_is_well_formed():
         assert spec.default_tile >= 64
 
 
-def test_presets_are_ordered_and_sane():
-    sizes = [w * h for w, h in PRESETS.values()]
-    assert sizes == sorted(sizes)
+def test_presets_are_sane():
+    # Not sorted by size on purpose - see test_planning.py for the 180p stop.
     assert PRESETS["8k"] == (7680, 4320)
+    assert PRESETS["180p"] == (320, 180)
+    assert all(w > 0 and h > 0 for w, h in PRESETS.values())
 
 
 def test_unknown_model_is_rejected():
