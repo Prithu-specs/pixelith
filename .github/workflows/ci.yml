@@ -55,3 +55,104 @@ jobs:
           PIXELITH_HOME: ${{ runner.temp }}/pixelith-home
           PIXELITH_OUT: ${{ runner.temp }}/pixelith-out
         run: pytest tests -v -m "not needs_model"
+
+  # Does it actually run on a real Windows, Linux and macOS machine, and how
+  # fast? The compact model is only 4.6 MB, so unlike the full weights it is
+  # cheap enough to fetch here and put through a genuine upscale.
+  smoke:
+    name: Smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Report what this machine looks like
+        run: python -m pixelith info
+
+      - name: Fetch the compact model
+        run: python -m pixelith download fast
+
+      - name: Upscale a real image and time it
+        shell: bash
+        run: |
+          python - <<'EOF'
+          import time
+          import numpy as np
+          from PIL import Image
+          from pixelith.config import MODELS, UpscaleSettings
+          from pixelith.engine import Engine
+
+          yy, xx = np.mgrid[0:360, 0:640].astype(np.float32)
+          img = np.stack([128 + 90 * np.sin(xx / 17),
+                          128 + 80 * np.cos(yy / 23),
+                          128 + 70 * np.sin((xx + yy) / 29)], -1)
+          img = img.clip(0, 255).astype(np.uint8)
+
+          eng = Engine(MODELS["fast"], UpscaleSettings())
+          print(f"provider={eng.provider} tile={eng.tile} workers={eng.workers}")
+          eng.upscale(img[:128, :128])
+
+          start = time.perf_counter()
+          out = eng.upscale(img)
+          elapsed = time.perf_counter() - start
+
+          mpix = (640 * 360) / 1e6
+          print(f"360p -> {out.shape[1]}x{out.shape[0]} in {elapsed:.2f}s "
+                f"({mpix / elapsed:.3f} input MPix/s)")
+          assert out.shape == (1440, 2560, 3), out.shape
+          assert out.dtype == np.uint8
+          assert out.std() > 5, "output looks blank"
+          Image.fromarray(out).save("smoke.png")
+          print("output written, shape and content look sane")
+          EOF
+
+      - name: Upscale a real video clip
+        shell: bash
+        run: |
+          ffmpeg -v error -y -f lavfi -i testsrc2=s=128x96:d=1:r=15 \
+                 -c:v libx264 -pix_fmt yuv420p clip.mp4
+          python -m pixelith upscale clip.mp4 -s 2 -y -o clip_up.mp4
+          python - <<'EOF'
+          from pixelith.video import probe
+          from pathlib import Path
+          info = probe(Path("clip_up.mp4"))
+          print(f"video out: {info.width}x{info.height}, {info.frames} frames")
+          assert (info.width, info.height) == (256, 192)
+          assert info.frames >= 14
+          EOF
+
+      - name: Run the full suite on this platform
+        env:
+          PIXELITH_HOME: ${{ runner.temp }}/pixelith-home
+          PIXELITH_OUT: ${{ runner.temp }}/pixelith-out
+        run: |
+          pip install pytest
+          pytest tests -q -m "not needs_model"
