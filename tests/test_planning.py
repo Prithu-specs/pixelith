@@ -110,11 +110,17 @@ def test_cli_lists_presets_in_ladder_order_not_alphabetically():
     from pixelith.cli import build_parser
     from pixelith.config import PRESETS
 
-    help_text = build_parser().format_help()
-    order = [p for p in PRESETS if p in help_text]
-    positions = [help_text.index(p) for p in ("180p", "1080p", "8k")]
+    import argparse
+
+    parser = build_parser()
+    subparsers = next(
+        a for a in parser._actions if isinstance(a, argparse._SubParsersAction)
+    )
+    help_text = subparsers.choices["upscale"].format_help()
+
+    assert all(name in help_text for name in PRESETS)
+    positions = [help_text.index(name) for name in ("180p", "1080p", "8k")]
     assert positions == sorted(positions), "presets are not in ladder order"
-    assert len(order) == len(PRESETS)
 
 
 def test_cli_accepts_the_hd_alias_like_the_api_does():
