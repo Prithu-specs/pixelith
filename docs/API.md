@@ -52,6 +52,25 @@ Fields: `file` (required), `model` (`fast`|`quality`), `preset` (`180p`…`8k`, 
 
 Response `201`: the full job object.
 
+## POST /api/preview   (multipart/form-data)
+Runs **one frame** through the real pipeline at the given settings, so a
+multi-hour job can be judged before it starts. Synchronous; it does not queue.
+
+Fields: `file` (required), `model`, `preset`, `scale`, `denoise`, `sharpen`.
+
+```json
+{"id":"1287e1c8fe36","kind":"video",
+ "source":{"width":640,"height":360},"output":{"width":3840,"height":2160},
+ "seconds":7.43,"frame_index":60,"measured_per_frame":7.43}
+```
+For video the frame is taken from the middle of the clip, and
+`measured_per_frame` is the real cost on this machine - multiply by the frame
+count for a total that is measured rather than projected.
+
+## GET /api/preview/{id}?side=before|after → JPEG.
+Previews are disposable; only the most recent few are kept, after which the id
+returns `404`.
+
 ## GET /api/jobs → array of job objects, newest first (descending `created_at`).
 ## GET /api/jobs/{id} → one job.
 

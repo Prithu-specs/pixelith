@@ -243,6 +243,11 @@
           <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>
           <span id="submit-label">Add files to begin</span>
         </button>
+        <button type="button" class="btn btn--ghost btn--block preview-btn"
+                id="preview-btn" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#i-drag"/></svg>
+          <span id="preview-btn-label">Preview one frame first</span>
+        </button>
         <p class="hint center" id="submit-hint">Everything runs locally on your machine.</p>
       </div>
     </form>
@@ -267,6 +272,32 @@
 
     <ul id="jobs" class="jobs"></ul>
   </section>
+<dialog id="preview-dlg" class="paywall preview-dlg">
+  <div class="paywall__inner">
+    <h2 class="paywall__title">One frame, at your settings</h2>
+    <p class="paywall__detail" id="preview-status">Working&hellip;</p>
+
+    <div class="compare" id="preview-compare" hidden>
+      <div class="compare__frame">
+        <img class="compare__img compare__img--after" alt="After upscaling" decoding="async">
+        <div class="compare__clip"><img class="compare__img compare__img--before" alt="Before upscaling" decoding="async"></div>
+        <div class="compare__handle" role="slider" tabindex="0" aria-label="Before and after comparison position"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50 percent">
+          <span class="compare__grip" aria-hidden="true"><svg class="icon"><use href="#i-drag"/></svg></span>
+        </div>
+        <span class="compare__tag compare__tag--l" aria-hidden="true">Before</span>
+        <span class="compare__tag compare__tag--r" aria-hidden="true">After</span>
+      </div>
+    </div>
+
+    <p class="paywall__note" id="preview-timing"></p>
+    <div class="paywall__actions">
+      <button type="button" class="btn btn--ghost" id="preview-close">Close</button>
+      <button type="button" class="btn" id="preview-accept">Looks right, start it</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="paywall" class="paywall">
   <form method="dialog" class="paywall__inner">
     <h2 class="paywall__title">You have reached the free limit</h2>

@@ -910,3 +910,10 @@ input[type="range"]::-moz-range-thumb {
   vertical-align: .12em;
   color: var(--accent, #6c5ce7);
 }
+
+
+/* --------------------------------------------------- one-frame preview -- */
+
+.preview-dlg { max-width: 46rem; }
+.preview-dlg .compare { margin: .2rem 0; }
+.preview-btn { margin-top: .6rem; width: 100%; }

@@ -54,6 +54,10 @@ honest set of numbers about how long things take.
   (see [Performance](#performance)).
 - **Seamless tiling.** Overlapping tiles blended with a feathered weight mask, so
   no grid artefacts even on very large images.
+- **Preview one frame before you commit.** A video job can run for hours; this
+  runs a single frame at your exact settings in seconds, shows it in the
+  before/after slider, and reports the measured per-frame cost so the total stops
+  being a projection.
 - **Resolution slider** — `360p`, `480p`, `720p`, `180p`, `1080p`, `2k`, `4k`, `6k`, `8k` — or an arbitrary scale factor.
 - **Web UI and CLI.** A static single-page UI with a before/after comparison, plus
   `python -m pixelith upscale` for scripts.

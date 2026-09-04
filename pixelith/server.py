@@ -22,7 +22,7 @@ from . import __version__, license_info, pricing
 from . import DEFAULT_CURRENCY as _DEFAULT_CURRENCY
 from .config import MODELS, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import available_providers, choose_providers
-from . import licensing
+from . import licensing, preview as preview_mod
 from .compat import summary as platform_summary
 from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
 from .models import status as model_status
@@ -235,6 +235,74 @@ def activate(req: ActivateRequest) -> dict:
 def deactivate() -> dict:
     return {"removed": licensing.deactivate(),
             "allowance": licensing.allowance_status()}
+
+
+@app.post("/api/preview")
+async def make_preview(
+    file: UploadFile = File(...),
+    model: str = Form("fast"),
+    preset: str | None = Form(None),
+    scale: float | None = Form(None),
+    denoise: float = Form(0.0),
+    sharpen: float = Form(0.0),
+) -> dict:
+    """Upscale one frame at the chosen settings, before committing to the job."""
+    name = Path(file.filename or "upload").name
+    try:
+        kind = classify(name)
+    except ValueError as exc:
+        raise HTTPException(415, str(exc)) from exc
+    if model not in MODELS:
+        raise HTTPException(400, f"unknown model {model!r}")
+
+    dest = UPLOAD_DIR / f"preview_{int(time.time() * 1000)}_{name}"
+    size = 0
+    try:
+        with dest.open("wb") as out:
+            while chunk := await file.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(413, "file is larger than the 8 GiB limit")
+                out.write(chunk)
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
+
+    settings = UpscaleSettings(
+        model=model,
+        preset=(preset.lower() if preset else None),
+        scale=scale if (scale and not preset) else None,
+        denoise=max(0.0, min(1.0, denoise)),
+        sharpen=max(0.0, min(1.0, sharpen)),
+    )
+    try:
+        result = preview_mod.run(dest, kind, settings)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, str(exc)) from exc
+    finally:
+        # The upload only existed to produce the preview.
+        dest.unlink(missing_ok=True)
+
+    data = result.as_dict()
+    if kind == "video":
+        # The preview time is the real per-frame cost, so the estimate for the
+        # whole job stops being a projection.
+        data["measured_per_frame"] = round(result.seconds, 2)
+    return data
+
+
+@app.get("/api/preview/{preview_id}")
+def preview_image(preview_id: str, side: str = "after"):
+    result = preview_mod.get(preview_id)
+    if not result:
+        raise HTTPException(404, "that preview has expired")
+    path = result.before if side == "before" else result.after
+    if not path.exists():
+        raise HTTPException(404, "preview image is gone")
+    return FileResponse(path, media_type="image/jpeg",
+                        headers={"Cache-Control": "max-age=300"})
 
 
 @app.get("/api/jobs")

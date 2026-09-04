@@ -48,6 +48,14 @@ const el = {
   allowanceUpgrade:$('#allowance-upgrade'),
   paywall:$('#paywall'),
   paywallDetail:$('#paywall-detail'),
+  previewBtn:$('#preview-btn'),
+  previewBtnLabel:$('#preview-btn-label'),
+  previewDlg:$('#preview-dlg'),
+  previewStatus:$('#preview-status'),
+  previewCompare:$('#preview-compare'),
+  previewTiming:$('#preview-timing'),
+  previewClose:$('#preview-close'),
+  previewAccept:$('#preview-accept'),
   presetOut:$('#preset-out'),
   presetScale:$('#preset-scale'),
   presetDetail:$('#preset-detail'),
@@ -693,6 +701,7 @@ function probeVideo(file) {
 function renderQueue() {
   // Source dimensions drive the size read-out and the downscale markers.
   if (typeof renderPreset === 'function' && presetKeys.length) renderPreset();
+  if (typeof syncPreviewButton === 'function') syncPreviewButton();
   el.queueWrap.hidden = staged.length === 0;
   setText(el.queueCount, staged.length ? String(staged.length) : '');
   el.queue.textContent = '';
@@ -1519,15 +1528,109 @@ function wirePaywall() {
 }
 
 /* -------------------------------------------------------------------------- *
+ * 11c. One-frame preview
+ * -------------------------------------------------------------------------- */
+
+let previewBusy = false;
+
+/**
+ * Run a single frame through the real pipeline before committing.
+ *
+ * A video job can take hours; this answers "did I pick the right settings" in
+ * seconds, and the time it takes IS the per-frame cost, so the projection for
+ * the whole job stops being a guess.
+ */
+async function runPreview(item) {
+  if (previewBusy || !item) return;
+  previewBusy = true;
+
+  el.previewCompare.hidden = true;
+  setText(el.previewTiming, '');
+  setText(el.previewStatus,
+    item.kind === 'video'
+      ? 'Upscaling one frame from the middle of the clip\u2026'
+      : 'Upscaling at your settings\u2026');
+  el.previewAccept.disabled = true;
+  if (typeof el.previewDlg.showModal === 'function' && !el.previewDlg.open) {
+    el.previewDlg.showModal();
+  }
+
+  const fd = new FormData();
+  fd.append('file', item.file);
+  fd.append('model', currentModel() || 'fast');
+  const target = targetPayload();
+  if (target.preset) fd.append('preset', target.preset);
+  else fd.append('scale', String(target.scale));
+  fd.append('denoise', el.denoise.value);
+  fd.append('sharpen', el.sharpen.value);
+
+  try {
+    const res = await api('/preview', { method: 'POST', body: fd });
+    const base = `${API}/preview/${encodeURIComponent(res.id)}`;
+    const before = $('.compare__img--before', el.previewCompare);
+    const after = $('.compare__img--after', el.previewCompare);
+    before.src = `${base}?side=before`;
+    after.src = `${base}?side=after`;
+    el.previewCompare.hidden = false;
+    initCompare(el.previewCompare, null, base);
+
+    const s = res.source, o = res.output;
+    setText(el.previewStatus,
+      `${s.width} \u00d7 ${s.height} \u2192 ${o.width} \u00d7 ${o.height}` +
+      (res.frame_index !== null && res.frame_index !== undefined
+        ? ` \u00b7 frame ${res.frame_index}` : ''));
+
+    if (item.kind === 'video' && res.measured_per_frame && item.source &&
+        item.source.frames) {
+      const total = res.measured_per_frame * item.source.frames;
+      setText(el.previewTiming,
+        `${res.seconds}s for this frame \u2014 measured, not estimated. ` +
+        `All ${item.source.frames.toLocaleString()} frames would take about ` +
+        `${formatDurationLong(total)}.`);
+    } else {
+      setText(el.previewTiming, `Took ${res.seconds}s.`);
+    }
+    el.previewAccept.disabled = false;
+  } catch (err) {
+    el.previewCompare.hidden = true;
+    setText(el.previewStatus, err.message || 'The preview failed.');
+  } finally {
+    previewBusy = false;
+  }
+}
+
+/** Offer the preview only when there is something to preview. */
+function syncPreviewButton() {
+  if (!el.previewBtn) return;
+  const item = staged[0];
+  el.previewBtn.hidden = !item;
+  if (item) {
+    setText(el.previewBtnLabel, item.kind === 'video'
+      ? 'Preview one frame first'
+      : 'Preview these settings first');
+  }
+}
+
+function wirePreview() {
+  if (!el.previewDlg) return;
+  el.previewBtn?.addEventListener('click', () => runPreview(staged[0]));
+  el.previewClose?.addEventListener('click', () => el.previewDlg.close());
+  el.previewAccept?.addEventListener('click', () => {
+    el.previewDlg.close();
+    submitAll();
+  });
+}
+
+/* -------------------------------------------------------------------------- *
  * 12. Before/after compare slider
  * -------------------------------------------------------------------------- */
 
-function initCompare(root, jobId) {
+function initCompare(root, jobId, baseUrl) {
   const frame = $('.compare__frame', root);
   const handle = $('.compare__handle', root);
   const before = $('.compare__img--before', root);
   const after = $('.compare__img--after', root);
-  const base = `${API}/jobs/${encodeURIComponent(jobId)}/thumb`;
+  const base = baseUrl || `${API}/jobs/${encodeURIComponent(jobId)}/thumb`;
 
   let failed = false;
   const onThumbError = () => {
@@ -1719,6 +1822,7 @@ async function boot() {
 function init() {
   wireDropzone();
   wirePaywall();
+  wirePreview();
   wireSettings();
   syncSliderOutputs();
   syncTargetMode();
