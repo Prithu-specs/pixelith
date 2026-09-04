@@ -726,15 +726,15 @@ input[type="range"]::-moz-range-thumb {
 .site-footer p:last-child { margin-bottom: 0; }
 .site-footer__terms { max-width: 62ch; margin-inline: auto; opacity: .9; }
 .site-footer a { color: inherit; text-decoration: underline; }
-.site-footer a:hover { color: var(--text-1, inherit); }
+.site-footer a:hover { color: var(--text); }
 
 
 /* ------------------------------------------------------ free-tier allowance */
 
 .allowance {
-  background: var(--surface, #fff);
+  background: var(--bg-elevated);
   border: 1px solid var(--line, rgba(128,128,128,.25));
-  border-radius: var(--radius, 10px);
+  border-radius: var(--r-sm);
   padding: var(--s-3, 1rem);
   display: grid;
   gap: .7rem;
@@ -792,9 +792,9 @@ input[type="range"]::-moz-range-thumb {
 
 .paywall {
   border: 1px solid var(--line, rgba(128,128,128,.25));
-  border-radius: var(--radius, 12px);
-  background: var(--surface, #fff);
-  color: var(--text-1, #111);
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  color: var(--text);
   padding: 0;
   max-width: 30rem;
   width: calc(100vw - 2rem);
@@ -835,7 +835,7 @@ input[type="range"]::-moz-range-thumb {
 
 .paywall__region {
   display: flex; gap: .35rem;
-  background: var(--bg-2, rgba(128,128,128,.08));
+  background: var(--bg-sunken);
   padding: .25rem; border-radius: 999px;
 }
 .paywall__region-btn {
@@ -845,7 +845,7 @@ input[type="range"]::-moz-range-thumb {
   min-height: 36px;
 }
 .paywall__region-btn[aria-pressed="true"] {
-  background: var(--surface, #fff);
+  background: var(--bg-elevated);
   box-shadow: 0 1px 3px rgba(0,0,0,.12);
 }
 
