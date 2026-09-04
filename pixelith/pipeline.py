@@ -105,13 +105,13 @@ def estimate_seconds(
     machine; each model scales it by its measured relative cost.
 
     The figure below is deliberately an end-to-end number: a 1920x1080 frame
-    through the fast model takes 8.3 s wall clock on an M5 Pro, which is
-    2.07 MPix / 8.3 s. Timing a single repeated tile suggests something far
-    rosier and is wrong - it re-runs one cached shape and skips the tiling
-    overhead (a tile grid covers 1.4x-2.3x the real pixel count).
+    through the fast model takes 3.7 s wall clock on an M5 Pro, which is
+    2.07 MPix / 3.7 s. Timing a single repeated tile suggests something far
+    rosier and is wrong - it re-runs one cached shape and ignores tiling
+    entirely.
     """
     spec = MODELS[model]
-    base = throughput or 0.25  # measured end-to-end: fast model, 1080p, M5 Pro
+    base = throughput or 0.56  # measured end-to-end: fast model, 1080p, M5 Pro
     rate = base / spec.cost
 
     total = 0.0

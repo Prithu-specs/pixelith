@@ -131,15 +131,18 @@ correctly is automatic.
 
 | Machine | What happens | 1080p frame, `fast` |
 |---|---|---|
-| NVIDIA GPU | CUDA, large tiles | Fastest; not benchmarked here |
-| Apple silicon | CoreML, tile 192 | ~8.6 s |
-| **Any CPU, no GPU** | **CPU, tile 512** | **~8.5 s on an M5 Pro** |
+| NVIDIA GPU | CUDA, large ragged tiles | Fastest; not benchmarked here |
+| **Any CPU, no GPU** | **CPU, tile 1024, no padding** | **3.7 s on an M5 Pro** |
+| Apple silicon | CPU for `fast`, CoreML for `quality` | 3.7 s / 21 s |
 | Windows with AMD/Intel GPU | DirectML, tile 384 | Untested |
 | 4 GB RAM machine | Tiles capped at 192 | Slower, but it completes |
 
-On a CPU-only machine an older or slower processor will of course take longer
-than the figure above — that row is the same M5 Pro with acceleration disabled,
-which isolates the effect of the provider rather than predicting your laptop.
+**Running without a GPU is now the fast path for the compact model**, not a
+consolation. Because CPU tolerates a changing tile shape, it can run a few large
+tiles at their true size where the neural engine needs many small padded ones.
+An older or slower processor will of course take longer than the figure above —
+that row is an M5 Pro with acceleration disabled, which isolates the provider
+rather than predicting your laptop.
 Expect a mainstream 4-core laptop to be a few times slower again. Photos remain
 practical; long video does not become practical on any CPU.
 
@@ -339,7 +342,7 @@ matters for how you should read the performance numbers below.
 | `fast` | `realesr-general-x4v3` | Compact SRVGG | 4.6 MB | 4x | Video, photo batches, anything where throughput matters. The default. |
 | `quality` | Real-ESRGAN x4plus | 23-block RRDBNet | 63.9 MB | 4x | Single stills where you want the most detail and do not mind waiting. |
 
-Relative cost per input pixel is roughly **5.2x** for `quality` against `fast`.
+Relative cost per input pixel is roughly **5.8x** for `quality` against `fast`.
 That factor is what makes `quality` a still-image tool and `fast` the only
 sensible choice for video.
 
@@ -363,10 +366,10 @@ but the *ratios* between models and providers hold up broadly.
 Throughput is megapixels of **input** per second, measured end to end: a real
 file in, a written file out, including tiling and blending.
 
-| Model | 1080p frame | Effective throughput |
-|---|---|---|
-| `fast` (SRVGG x4v3) | **~8.6 s** | ~0.24 MPix/s |
-| `quality` (x4plus RRDBNet) | ~45 s | ~0.046 MPix/s |
+| Model | 1080p frame | Best provider | Effective throughput |
+|---|---|---|---|
+| `fast` (SRVGG x4v3) | **~3.7 s** | CPU | ~0.56 MPix/s |
+| `quality` (x4plus RRDBNet) | ~21 s | CoreML | ~0.098 MPix/s |
 
 Two things here are worth knowing, because both cost real hours if you get them
 wrong.
@@ -396,13 +399,12 @@ Measured, `fast` model, native 4x pass, cold input to written file.
 
 | Input | Input MPix | Time | Throughput |
 |---|---|---|---|
-| 512 x 512 | 0.26 | 1.6 s | 0.17 MPix/s |
-| 1024 x 1024 | 1.05 | 5.1 s | 0.21 MPix/s |
-| 1920 x 1080 | 2.07 | 9.1 s | 0.23 MPix/s |
-| 2560 x 1440 | 3.69 | 15.6 s | 0.24 MPix/s |
-| 3840 x 2160 | 8.29 | ~35 s* | ~0.24 MPix/s |
+| 512 x 512 | 0.26 | ~0.8 s | ~0.33 MPix/s |
+| 1024 x 1024 | 1.05 | ~2.1 s | ~0.50 MPix/s |
+| 1920 x 1080 | 2.07 | **3.7 s** | 0.56 MPix/s |
+| 3840 x 2160 | 8.29 | ~15 s* | ~0.55 MPix/s |
 
-\* extrapolated from the trend; the rest are measured.
+\* extrapolated; the 1080p row is measured end to end.
 
 The `quality` model costs roughly **5.2x** these times. For a single photo that
 is a good trade: a 512 x 512 image takes about 8 s and gains far more real
@@ -417,7 +419,7 @@ Here is the bad news, stated plainly.
 
 Video is upscaled frame by frame. There is no temporal shortcut, no keyframe
 interpolation, no reuse between frames. One minute of 1080p at 30 fps is 1,800
-separate 1080p upscales at ~9 s each, which is **about four and a half hours**.
+separate 1080p upscales at ~3.7 s each, which is **about two hours**.
 
 Times below use the `fast` model with auto-selected tiling. A CUDA GPU will beat
 these substantially; a CPU-only laptop lands in the same ballpark as the figures
@@ -425,14 +427,14 @@ here, because tile sizing matters more than the provider.
 
 | Source | Per frame | 10 s @30 | 1 min @30 | 5 min @30 | 1 min @60 |
 |---|---|---|---|---|---|
-| 480p (854 x 480) | ~2.2 s | 11 min | 1.1 h | 5.5 h | 2.2 h |
-| 720p | ~4.3 s | 21 min | 2.2 h | 11 h | 4.3 h |
-| **1080p** | **9.1 s** | **46 min** | **4.6 h** | **23 h** | **9.1 h** |
-| 1440p | 15.6 s | 78 min | 7.8 h | 39 h | 16 h |
-| 4K | ~35 s | 2.9 h | 18 h | 3.6 days | 35 h |
+| 480p (854 x 480) | ~0.9 s | 4 min | 27 min | 2.2 h | 54 min |
+| 720p | ~1.7 s | 8 min | 51 min | 4.2 h | 1.7 h |
+| **1080p** | **3.7 s** | **19 min** | **1.9 h** | **9.3 h** | **3.7 h** |
+| 1440p | ~6.6 s | 33 min | 3.3 h | 17 h | 6.6 h |
+| 4K | ~15 s | 75 min | 7.5 h | 37 h | 15 h |
 
-Using the `quality` model on video multiplies all of the above by roughly 5.2.
-One minute of 1080p becomes about **24 hours**. Pixelith will let you do it.
+Using the `quality` model on video multiplies all of the above by roughly 5.8.
+One minute of 1080p becomes about **11 hours**. Pixelith will let you do it.
 Please do not.
 
 Because jobs are this long, video is **resumable**. Work is written in ~8 second
@@ -567,8 +569,7 @@ These are real, and none of them are on a near-term roadmap. Read them before
 you decide whether Pixelith fits your problem.
 
 - **Video is slow.** Not "slower than you'd like" — an order of magnitude away
-  from real time. One minute of 1080p is about four and a half hours on an M5
-  Pro. Nothing
+  from real time. One minute of 1080p is about two hours on an M5 Pro. Nothing
   in this project is intended for live or interactive video use.
 - **8K video is impractical on essentially all consumer hardware.** Even at
   `fast` on a good GPU you are looking at days for anything of meaningful length,
@@ -824,9 +825,9 @@ real ceiling, not bytes:
 
 | Your source | 1 GB is about | Time to upscale it to 8K |
 |---|---|---|
-| Phone 1080p | 8 minutes | ~34 hours |
-| Phone 4K | 3 minutes | ~13 hours |
-| Screen recording | 45 minutes | ~193 hours |
+| Phone 1080p | 8 minutes | ~14 hours |
+| Phone 4K | 3 minutes | ~5 hours |
+| Screen recording | 45 minutes | ~78 hours |
 
 Most personal users will never reach the limit, because they would need to leave
 the machine running for weeks first. If you do reach it, $10 is not a lot to ask.

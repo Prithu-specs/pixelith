@@ -60,10 +60,13 @@ MODELS: dict[str, ModelSpec] = {
         notes="Compact network. The right default for video and for batches of photos.",
         cost=1.0,
         default_tile=192,
+        # Measured: with edge-margin tiling this network is 2.2x faster on plain
+        # CPU than on CoreML, because it can then run few large ragged tiles
+        # instead of many padded ones. The deep model is the other way round.
         preferred_providers=(
             "CUDAExecutionProvider",
-            "CoreMLExecutionProvider",
             "CPUExecutionProvider",
+            "CoreMLExecutionProvider",
         ),
     ),
     "quality": ModelSpec(
@@ -78,7 +81,7 @@ MODELS: dict[str, ModelSpec] = {
         size_mb=63.9,
         label="Quality (Real-ESRGAN x4plus)",
         notes="23-block RRDBNet. Best detail on stills; too slow for long video.",
-        cost=5.2,
+        cost=5.8,
         default_tile=192,
         preferred_providers=(
             "CUDAExecutionProvider",

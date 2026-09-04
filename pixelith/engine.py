@@ -81,12 +81,17 @@ def choose_providers(
 # runs at its own best tile (8.5 s vs 8.7 s), but CPU at CoreML's tile size is
 # 30% slower. Threaded CPU kernels want few large tiles; the neural engine wants
 # many small ones.
+# Providers that tolerate a changing input shape cheaply. CoreML recompiles per
+# shape, so it must keep every tile the same size; the others do not, which lets
+# them skip padding entirely and process far fewer pixels.
+_STABLE_SHAPE_REQUIRED = {"CoreMLExecutionProvider"}
+
 _TILE_BY_PROVIDER = {
-    "CPUExecutionProvider": 512,
+    "CPUExecutionProvider": 1024,
     "CoreMLExecutionProvider": 192,
-    "CUDAExecutionProvider": 512,     # untested; large tiles suit GPU batching
+    "CUDAExecutionProvider": 1024,    # untested; large tiles suit GPU batching
     "DmlExecutionProvider": 384,      # untested
-    "ROCMExecutionProvider": 512,     # untested
+    "ROCMExecutionProvider": 1024,    # untested
 }
 
 
@@ -167,6 +172,8 @@ class Engine:
         # An explicit --tile always wins; otherwise adapt to provider and RAM.
         self.tile = int(self.settings.tile or pick_tile(self.provider, spec))
         self.overlap = max(0, int(self.settings.overlap))
+        # Constant-shape tiles cost padding; only pay it where it buys something.
+        self.pad_tiles = self.provider in _STABLE_SHAPE_REQUIRED
         if self.overlap * 2 >= self.tile:
             self.overlap = max(0, self.tile // 8)
         self._lock = threading.Lock()
@@ -211,6 +218,7 @@ class Engine:
 
         total = len(ys) * len(xs)
         done = 0
+        margin = self.overlap
         for y in ys:
             for x in xs:
                 if should_cancel and should_cancel():
@@ -220,15 +228,38 @@ class Engine:
                 patch = src[y:y1, x:x1]
                 ph, pw = patch.shape[:2]
 
-                # Constant shape for every call: reflect-pad short edges.
-                if ph != T or pw != T:
-                    patch = np.pad(
-                        patch,
-                        ((0, T - ph), (0, T - pw), (0, 0)),
-                        mode="reflect" if min(ph, pw) > 1 else "edge",
-                    )
+                if self.pad_tiles:
+                    # CoreML recompiles per input shape, so every tile is padded
+                    # up to the full tile size and cropped afterwards.
+                    if ph != T or pw != T:
+                        patch = np.pad(
+                            patch,
+                            ((0, T - ph), (0, T - pw), (0, 0)),
+                            mode="reflect" if min(ph, pw) > 1 else "edge",
+                        )
+                    up = self._run_tile(patch)[: ph * s, : pw * s]
+                else:
+                    # Elsewhere, run the tile at its real size and reflect only
+                    # a small margin at the true image boundary. Padding every
+                    # tile to full size runs up to twice the real pixel count
+                    # for no benefit.
+                    pt = margin if y == 0 else 0
+                    pl = margin if x == 0 else 0
+                    pb = margin if y1 == h else 0
+                    pr = margin if x1 == w else 0
+                    if (pt or pl or pb or pr) and min(ph, pw) > 1:
+                        patch = np.pad(
+                            patch, ((pt, pb), (pl, pr), (0, 0)), mode="reflect"
+                        )
+                    else:
+                        pt = pl = pb = pr = 0
+                    up = self._run_tile(patch)
+                    if pt or pl or pb or pr:
+                        up = up[
+                            pt * s : up.shape[0] - pb * s if pb else None,
+                            pl * s : up.shape[1] - pr * s if pr else None,
+                        ]
 
-                up = self._run_tile(patch)[: ph * s, : pw * s]
                 mask = (
                     _feather(ph * s, V * s)[:, None]
                     * _feather(pw * s, V * s)[None, :]
