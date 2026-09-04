@@ -24,6 +24,7 @@ from typing import Callable
 import numpy as np
 
 from .config import ModelSpec, UpscaleSettings
+from .compat import total_ram_bytes
 from .models import ensure
 
 log = logging.getLogger("pixelith.engine")
@@ -95,26 +96,39 @@ _TILE_BY_PROVIDER = {
 }
 
 
-def pick_tile(provider: str, spec: "ModelSpec", ram_bytes: int | None = None) -> int:
-    """Best tile size for this provider, reduced when memory is tight.
+# Measured peak RSS for a 1080p -> 8K job on an M5 Pro, which is the worst
+# realistic case. Memory is what stops a small machine, so the tile is chosen
+# from a budget rather than from a guess about the class of computer.
+#
+#   tile 1024 -> 2262 MB, 3.5 s      tile 256 -> 556 MB, 6.1 s
+#   tile  512 -> 1154 MB, 4.5 s      tile 192 -> 449 MB, 7.1 s
+_TILE_BUDGET_MB = ((1024, 2300), (512, 1200), (384, 850), (256, 600), (192, 460))
 
-    Tiles are the main memory lever on low-end machines: a tile of T pixels
-    holds T*scale squared floats while it is in flight, on top of the
-    whole-image accumulator.
+
+def pick_tile(
+    provider: str, spec: "ModelSpec", ram_bytes: int | None = None
+) -> int:
+    """Largest tile whose peak memory fits comfortably in this machine's RAM.
+
+    Bigger tiles are faster, so this takes the biggest one that leaves the rest
+    of the system room to breathe: at most a quarter of total memory, and never
+    more than the provider actually benefits from.
     """
     from .compat import total_ram_bytes
 
-    tile = _TILE_BY_PROVIDER.get(provider, spec.default_tile)
+    ceiling = _TILE_BY_PROVIDER.get(provider, spec.default_tile)
     ram = ram_bytes if ram_bytes is not None else total_ram_bytes()
-    gb = ram / 1024**3
-    if gb < 4:
-        tile = min(tile, 192)
-    elif gb < 8:
-        tile = min(tile, 256)
-    # Deep models hold far more activation memory per tile than compact ones.
+    budget_mb = (ram / 1024**2) * 0.25
+
+    # The deep model holds far more activation memory per tile.
     if spec.cost > 3:
-        tile = min(tile, 256)
-    return max(64, tile)
+        ceiling = min(ceiling, 256)
+        budget_mb *= 0.6
+
+    for tile, needs_mb in _TILE_BUDGET_MB:
+        if tile <= ceiling and needs_mb <= budget_mb:
+            return tile
+    return max(64, min(ceiling, 192))
 
 
 def _feather(size: int, overlap: int) -> np.ndarray:
@@ -168,6 +182,36 @@ class Engine:
             )
 
         self.provider = self.session.get_providers()[0]
+
+        # Optional second worker on a different provider. Tiles are shared
+        # between them, so a slower device simply does fewer. Worth having
+        # where the two are genuinely separate silicon; on a shared-memory
+        # machine the gain is small, because dispatching to the neural engine
+        # still costs CPU. Skipped when memory is tight, since each session
+        # carries its own working buffers.
+        self.extra: list = []
+        # A second worker only pays when it is competitive at the tile size in
+        # use. A small tile count means there is nothing to share anyway.
+        if self.settings.hybrid and total_ram_bytes() >= 12 * 1024**3:
+            for alt in providers:
+                if alt == self.provider or alt == "CPUExecutionProvider":
+                    continue
+                try:
+                    self.extra.append(
+                        ort.InferenceSession(str(path), opts, providers=[alt,
+                                             "CPUExecutionProvider"])
+                    )
+                except Exception:  # noqa: BLE001 - a second worker is a bonus
+                    pass
+                break
+            if not self.extra and self.provider != "CPUExecutionProvider":
+                try:
+                    self.extra.append(
+                        ort.InferenceSession(str(path), opts,
+                                             providers=["CPUExecutionProvider"])
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
         self.input_name = self.session.get_inputs()[0].name
         # An explicit --tile always wins; otherwise adapt to provider and RAM.
         self.tile = int(self.settings.tile or pick_tile(self.provider, spec))
@@ -187,14 +231,18 @@ class Engine:
             self.spec.key, self.scale, self.provider, self.tile, self.overlap
         )
 
-    def _run_tile(self, tile: np.ndarray) -> np.ndarray:
-        """tile: (T,T,3) float32 in [0,1] -> (T*s,T*s,3) float32."""
+    def _run_tile(self, tile: np.ndarray, session=None) -> np.ndarray:
+        """tile: (h,w,3) float32 in [0,1] -> (h*s,w*s,3) float32."""
         batch = np.ascontiguousarray(
             tile.transpose(2, 0, 1)[None], dtype=np.float32
         )
-        with self._lock:
-            out = self.session.run(None, {self.input_name: batch})[0]
+        # ORT sessions are safe to call concurrently, so workers need no lock.
+        out = (session or self.session).run(None, {self.input_name: batch})[0]
         return out[0].transpose(1, 2, 0)
+
+    @property
+    def workers(self) -> int:
+        return 1 + len(self.extra)
 
     def upscale(
         self,
@@ -213,65 +261,129 @@ class Engine:
 
         ys = list(range(0, max(1, h), step))
         xs = list(range(0, max(1, w), step))
-        acc = np.zeros((h * s, w * s, 3), dtype=np.float32)
-        wsum = np.zeros((h * s, w * s, 1), dtype=np.float32)
+
+        # The output is assembled a band at a time. A whole-image float
+        # accumulator costs four times the finished picture: at 8K that is
+        # 530 MB before any working buffer, which is the difference between
+        # running and not running on a small machine. A band only has to be as
+        # tall as one row of tiles.
+        out = np.empty((h * s, w * s, 3), dtype=np.uint8)
+        band_h = min(T, h) * s
+        acc = np.zeros((band_h, w * s, 3), dtype=np.float32)
+        wsum = np.zeros((band_h, w * s, 1), dtype=np.float32)
+
+        sessions = [self.session, *self.extra]
+        pool = None
+        if len(sessions) > 1 and len(xs) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+
+            pool = ThreadPoolExecutor(max_workers=len(sessions))
+        write_lock = threading.Lock()
 
         total = len(ys) * len(xs)
         done = 0
-        margin = self.overlap
-        for y in ys:
-            for x in xs:
+        margin = V
+
+        def one_tile(y: int, x: int, session) -> None:
+            """Run a single tile into the current band. Concurrency-safe."""
+            y1, x1 = min(y + T, h), min(x + T, w)
+            patch = src[y:y1, x:x1]
+            ph, pw = patch.shape[:2]
+
+            if self.pad_tiles:
+                # CoreML recompiles per input shape, so tiles are padded up to
+                # the full tile size and cropped afterwards.
+                if ph != T or pw != T:
+                    patch = np.pad(
+                        patch,
+                        ((0, T - ph), (0, T - pw), (0, 0)),
+                        mode="reflect" if min(ph, pw) > 1 else "edge",
+                    )
+                up = self._run_tile(patch, session)[: ph * s, : pw * s]
+            else:
+                # Elsewhere, run the tile at its real size and reflect only a
+                # small margin at the true image boundary. Padding every tile to
+                # full size runs up to twice the real pixel count.
+                pt = margin if y == 0 else 0
+                pl = margin if x == 0 else 0
+                pb = margin if y1 == h else 0
+                pr = margin if x1 == w else 0
+                if (pt or pl or pb or pr) and min(ph, pw) > 1:
+                    patch = np.pad(
+                        patch, ((pt, pb), (pl, pr), (0, 0)), mode="reflect"
+                    )
+                else:
+                    pt = pl = pb = pr = 0
+                up = self._run_tile(patch, session)
+                if pt or pl or pb or pr:
+                    up = up[
+                        pt * s : up.shape[0] - pb * s if pb else None,
+                        pl * s : up.shape[1] - pr * s if pr else None,
+                    ]
+
+            mask = (
+                _feather(ph * s, V * s)[:, None]
+                * _feather(pw * s, V * s)[None, :]
+            )[..., None]
+            contribution = up * mask
+
+            with write_lock:
+                acc[: ph * s, x * s : x * s + pw * s] += contribution
+                wsum[: ph * s, x * s : x * s + pw * s] += mask
+
+        def flush(top: int, rows: int) -> None:
+            """Finish `rows` of the band and copy them into the output."""
+            if rows <= 0:
+                return
+            a, wt = acc[:rows], wsum[:rows]
+            np.maximum(wt, 1e-6, out=wt)
+            a /= wt
+            a *= 255.0
+            a += 0.5
+            np.clip(a, 0, 255, out=a)
+            out[top : top + rows] = a.astype(np.uint8)
+
+        try:
+            for row, y in enumerate(ys):
                 if should_cancel and should_cancel():
                     raise Cancelled()
 
-                y1, x1 = min(y + T, h), min(x + T, w)
-                patch = src[y:y1, x:x1]
-                ph, pw = patch.shape[:2]
-
-                if self.pad_tiles:
-                    # CoreML recompiles per input shape, so every tile is padded
-                    # up to the full tile size and cropped afterwards.
-                    if ph != T or pw != T:
-                        patch = np.pad(
-                            patch,
-                            ((0, T - ph), (0, T - pw), (0, 0)),
-                            mode="reflect" if min(ph, pw) > 1 else "edge",
-                        )
-                    up = self._run_tile(patch)[: ph * s, : pw * s]
+                if pool is None:
+                    for x in xs:
+                        if should_cancel and should_cancel():
+                            raise Cancelled()
+                        one_tile(y, x, self.session)
                 else:
-                    # Elsewhere, run the tile at its real size and reflect only
-                    # a small margin at the true image boundary. Padding every
-                    # tile to full size runs up to twice the real pixel count
-                    # for no benefit.
-                    pt = margin if y == 0 else 0
-                    pl = margin if x == 0 else 0
-                    pb = margin if y1 == h else 0
-                    pr = margin if x1 == w else 0
-                    if (pt or pl or pb or pr) and min(ph, pw) > 1:
-                        patch = np.pad(
-                            patch, ((pt, pb), (pl, pr), (0, 0)), mode="reflect"
-                        )
-                    else:
-                        pt = pl = pb = pr = 0
-                    up = self._run_tile(patch)
-                    if pt or pl or pb or pr:
-                        up = up[
-                            pt * s : up.shape[0] - pb * s if pb else None,
-                            pl * s : up.shape[1] - pr * s if pr else None,
-                        ]
+                    # Tiles in a row are independent, so they can be shared
+                    # across workers. Rows still complete in order, which is
+                    # what keeps the banding valid.
+                    jobs = [
+                        pool.submit(one_tile, y, x, sessions[i % len(sessions)])
+                        for i, x in enumerate(xs)
+                    ]
+                    for job in jobs:
+                        job.result()
 
-                mask = (
-                    _feather(ph * s, V * s)[:, None]
-                    * _feather(pw * s, V * s)[None, :]
-                )[..., None]
-
-                acc[y * s : y * s + ph * s, x * s : x * s + pw * s] += up * mask
-                wsum[y * s : y * s + ph * s, x * s : x * s + pw * s] += mask
-
-                done += 1
+                done += len(xs)
                 if progress:
-                    progress(done / total)
+                    progress(min(1.0, done / total))
 
-        np.maximum(wsum, 1e-6, out=wsum)
-        acc /= wsum
-        return np.clip(acc * 255.0 + 0.5, 0, 255).astype(np.uint8)
+                top = y * s
+                settled = (
+                    (ys[row + 1] - y) * s if row + 1 < len(ys) else h * s - top
+                )
+                settled = min(settled, h * s - top, band_h)
+                flush(top, settled)
+
+                if row + 1 < len(ys):
+                    keep = band_h - settled
+                    if keep > 0:
+                        acc[:keep] = acc[settled : settled + keep]
+                        wsum[:keep] = wsum[settled : settled + keep]
+                    acc[keep:] = 0.0
+                    wsum[keep:] = 0.0
+        finally:
+            if pool is not None:
+                pool.shutdown(wait=True)
+
+        return out

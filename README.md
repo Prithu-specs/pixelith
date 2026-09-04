@@ -75,7 +75,7 @@ honest set of numbers about how long things take.
 | **Python** | 3.10 or newer |
 | **FFmpeg** | Required for all video work; must be on your `PATH` |
 | **Disk** | ~70 MB for both model files, plus scratch space while video runs |
-| **RAM** | 4 GB minimum, 8 GB workable, 16 GB+ comfortable for 4K and above |
+| **RAM** | 2 GB minimum, 4 GB comfortable, more only makes it faster |
 | **Network** | Only on first run, to fetch model weights |
 | **GPU** | **Not required.** See below. |
 
@@ -139,9 +139,24 @@ correctly is automatic.
 | **Any CPU, no GPU** | **CPU, tile 1024, no padding** | **3.7 s on an M5 Pro** |
 | Apple silicon | CPU for `fast`, CoreML for `quality` | 3.7 s / 21 s |
 | Windows with AMD/Intel GPU | DirectML, tile 384 | Untested |
-| 4 GB RAM machine | Tiles capped at 192 | Slower, but it completes |
+| 4 GB RAM machine | Tile 384, banded output | Slower, but it completes |
+| 2 GB RAM machine | Tile 192, banded output | Slowest, still completes |
 
-**Running without a GPU is now the fast path for the compact model**, not a
+**Memory no longer scales with output size.** The picture is assembled a band
+at a time, so an 8K job needs about the same working memory as a 4K one. Peak
+usage is set by the tile size, which is chosen from your actual RAM:
+
+| Machine RAM | Tile | Peak for a 1080p &rarr; 8K job | Time |
+|---|---|---|---|
+| 2 GB | 192 | ~450 MB | ~7.1 s/frame |
+| 4 GB | 384 | ~850 MB | ~5.0 s/frame |
+| 8 GB | 512 | ~1.2 GB | ~4.5 s/frame |
+| 16 GB+ | 1024 | ~2.3 GB | ~3.5 s/frame |
+
+An 8K job used to peak at **3.9 GB** regardless of machine, which simply failed
+on anything small. It is now 2.3 GB at most and 450 MB at least.
+
+**Running without a GPU is the fast path for the compact model**, not a
 consolation. Because CPU tolerates a changing tile shape, it can run a few large
 tiles at their true size where the neural engine needs many small padded ones.
 An older or slower processor will of course take longer than the figure above —

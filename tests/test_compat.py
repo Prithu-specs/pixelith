@@ -41,12 +41,36 @@ def test_cpu_and_neural_engine_want_different_tiles():
     assert cpu > ane, "threaded CPU kernels need larger tiles than the ANE"
 
 
-@pytest.mark.parametrize(
-    "ram_gb,ceiling", [(2, 192), (3, 192), (6, 256), (7, 256)]
-)
-def test_low_memory_machines_get_smaller_tiles(ram_gb, ceiling):
+# Measured peak RSS for a 1080p -> 8K job, the worst realistic case.
+_PEAK_MB = {192: 449, 256: 556, 384: 850, 512: 1154, 1024: 2262}
+
+
+@pytest.mark.parametrize("ram_gb", [1, 2, 3, 4, 6, 8, 16, 32, 64])
+def test_the_chosen_tile_fits_in_a_quarter_of_memory(ram_gb):
+    """Bigger tiles are faster, so the rule is 'the largest that still leaves
+    the rest of the machine room', not a fixed table."""
     for provider in ("CPUExecutionProvider", "CUDAExecutionProvider"):
-        assert pick_tile(provider, MODELS["fast"], ram_gb * GB) <= ceiling
+        tile = pick_tile(provider, MODELS["fast"], ram_gb * GB)
+        needed = _PEAK_MB.get(tile)
+        if needed is None:
+            continue
+        budget = ram_gb * 1024 * 0.25
+        assert needed <= max(budget, _PEAK_MB[192]), (
+            f"{ram_gb}GB machine picked tile {tile} needing {needed}MB"
+        )
+
+
+def test_more_memory_never_means_a_smaller_tile():
+    previous = 0
+    for gb in (1, 2, 4, 8, 16, 32, 64):
+        tile = pick_tile("CPUExecutionProvider", MODELS["fast"], gb * GB)
+        assert tile >= previous, "tile shrank as memory grew"
+        previous = tile
+
+
+def test_a_tiny_machine_still_gets_a_workable_tile():
+    """It must degrade to slow, never to impossible."""
+    assert pick_tile("CPUExecutionProvider", MODELS["fast"], 1 * GB) >= 64
 
 
 def test_deep_model_is_capped_regardless_of_memory():

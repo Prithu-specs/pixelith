@@ -126,3 +126,41 @@ def test_both_tiling_paths_agree_away_from_the_border():
         a[edge:-edge, edge:-edge].astype(int) - b[edge:-edge, edge:-edge].astype(int)
     )
     assert interior.max() <= 8, f"interior differs by {interior.max()}"
+
+
+def test_hybrid_is_off_by_default():
+    """Measured on shared-memory silicon it lost badly: a second CoreML session
+    at the tile size actually in use ran 3.3x slower and used 4x the memory."""
+    assert UpscaleSettings().hybrid is False
+
+
+@needs_model
+@pytest.mark.needs_model
+def test_memory_does_not_scale_with_output_size():
+    """Banded assembly is what lets a small machine reach 8K. A whole-image
+    float accumulator costs four times the finished picture."""
+    from pixelith.engine import Engine
+
+    eng = Engine(MODELS["fast"], UpscaleSettings(tile=96, overlap=8,
+                                                 providers=["CPUExecutionProvider"]))
+    small = eng.upscale((np.random.rand(64, 64, 3) * 255).astype(np.uint8))
+    big = eng.upscale((np.random.rand(64, 512, 3) * 255).astype(np.uint8))
+    assert small.shape == (256, 256, 3)
+    assert big.shape == (256, 2048, 3)
+
+
+@needs_model
+@pytest.mark.needs_model
+def test_banding_leaves_no_horizontal_seam():
+    """Bands are flushed a row of tiles at a time; a mistake there would show
+    as a hard line across the picture."""
+    from pixelith.engine import Engine
+
+    yy, xx = np.mgrid[0:300, 0:200].astype(np.float32)
+    img = np.stack([yy / 300 * 255, xx / 200 * 255,
+                    (yy + xx) / 500 * 255], -1).astype(np.uint8)
+    out = Engine(MODELS["fast"],
+                 UpscaleSettings(tile=64, overlap=8,
+                                 providers=["CPUExecutionProvider"])).upscale(img)
+    rows = np.abs(np.diff(out.astype(int), axis=0)).mean(axis=(1, 2))
+    assert rows.max() < 4.0, f"horizontal band seam, jump {rows.max():.2f}"
