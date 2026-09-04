@@ -743,10 +743,10 @@ modify it for your own use. Reading it does not grant rights beyond the licence.
 | Tier | India | Elsewhere | Covers |
 |---|---|---|---|
 | **Free** | &mdash; | &mdash; | Personal use, **100 images** and **1 GB of video input** |
-| **Personal** | **&#8377;499** + GST | **$10** | One person, all their devices. Unlimited, for life |
-| **Commercial** | **&#8377;7,999** + GST | **$200** | One company. Any commercial use, unlimited, for life |
+| **Personal** | **&#8377;513** + GST | **$10** | One person, all their devices. Unlimited, for life |
+| **Commercial** | **&#8377;8,228** + GST | **$200** | One company. Any commercial use, unlimited, for life |
 
-Indian buyers pay &#8377;589 and &#8377;9,439 respectively, including 18% GST.
+Indian buyers pay &#8377;605 and &#8377;9,709 respectively, including 18% GST.
 
 One-time payments. Nothing to renew, no subscription, no expiry.
 

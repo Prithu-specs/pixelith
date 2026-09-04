@@ -44,8 +44,8 @@ CURRENCIES = {
     "INR": {
         "symbol": "\u20b9",
         "region": "India",
-        "personal": 499,
-        "commercial": 7999,
+        "personal": 513,
+        "commercial": 8228,
         # Quoted exclusive of GST, which is added at checkout and shown on the
         # tax invoice. The all-in figure is published too, so nobody is
         # surprised by the total at the payment step.

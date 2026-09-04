@@ -96,12 +96,12 @@ def test_contributing_grants_the_right_to_relicense_commercially():
 def test_published_prices_match_the_licence_text():
     """A price typo in the UI or the licence would be a public pricing error."""
     licence = licence_text()
-    for token in ("Rs 499", "US$10", "Rs 7,999", "US$200"):
+    for token in ("Rs 513", "US$10", "Rs 8,228", "US$200"):
         assert token in licence, f"{token!r} missing from the licence"
 
     inr = pixelith.CURRENCIES["INR"]
     usd = pixelith.CURRENCIES["USD"]
-    assert (inr["personal"], inr["commercial"]) == (499, 7999)
+    assert (inr["personal"], inr["commercial"]) == (513, 8228)
     assert (usd["personal"], usd["commercial"]) == (10, 200)
 
 
@@ -119,9 +119,9 @@ def test_indian_prices_are_quoted_exclusive_of_gst():
 
 def test_the_all_in_total_is_computed_and_published():
     p = pixelith.pricing()["INR"]
-    assert p["personal_total"] == round(499 * 1.18) == 589
-    assert p["commercial_total"] == round(7999 * 1.18) == 9439
-    assert pixelith.tier_total("personal", "INR") == "\u20b9589"
+    assert p["personal_total"] == round(513 * 1.18) == 605
+    assert p["commercial_total"] == round(8228 * 1.18) == 9709
+    assert pixelith.tier_total("personal", "INR") == "\u20b9605"
     # Dollar prices carry no Indian GST, so total equals price.
     usd = pixelith.pricing()["USD"]
     assert usd["personal_total"] == usd["personal"] == 10
@@ -191,6 +191,17 @@ def test_regional_pricing_is_exposed_to_clients():
 def test_currency_toggle_exists_in_the_interface():
     html = (ROOT / "web/index.html").read_text()
     assert 'data-currency="INR"' in html and 'data-currency="USD"' in html
+
+
+def test_the_html_fallback_prices_match_the_configured_ones():
+    """The markup carries a default price that shows before the API responds.
+    If it drifts, buyers see the wrong number for a moment."""
+    html = (ROOT / "web/index.html").read_text()
+    inr = pixelith.CURRENCIES["INR"]
+    for amount in (inr["personal"], inr["commercial"]):
+        assert f"&#8377;{amount:,}" in html, (
+            f"the markup fallback does not show \u20b9{amount:,}"
+        )
 
 
 def test_free_allowance_is_consistent_everywhere():
