@@ -187,3 +187,13 @@ def test_free_output_is_still_marked_during_the_beta():
 def test_a_paid_licence_still_removes_the_mark_during_the_beta():
     L.activate(signed_key("personal"))
     assert L.allowance_status()["watermarked"] is False
+
+
+def test_status_does_not_claim_a_mark_when_a_licence_is_active():
+    """The beta branch used to hardcode the watermark line, which was wrong
+    for anyone holding a licence during the beta."""
+    L.activate(signed_key("commercial", "PGA Tech Solutions"))
+    st = L.allowance_status()
+    assert st["beta"] is True
+    assert st["watermarked"] is False
+    assert st["holder"] == "PGA Tech Solutions"

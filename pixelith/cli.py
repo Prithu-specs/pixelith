@@ -160,7 +160,13 @@ def cmd_status(args: argparse.Namespace) -> int:
               f"({st['images_used']} used so far)")
         print("  video    unlimited during the beta "
               f"({_fmt_bytes(st['video_bytes_used'])} used so far)")
-        print("  output   carries an invisible provenance mark")
+        # A licence removes the mark during the beta too, so read the state
+        # rather than assuming free-tier output.
+        if st["watermarked"]:
+            print("  output   carries an invisible provenance mark")
+        else:
+            holder = st["holder"] or st["tier"]
+            print(f"  output   no watermark ({st['tier']} licence, {holder})")
         print()
         print("  Nothing is charged and there is no payment step. Pricing")
         print("  starts when the beta ends; see 'pixelith license'.")

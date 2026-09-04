@@ -1415,7 +1415,10 @@ function renderAllowance() {
       `Free and unlimited until ${allowance.beta_ends} ` +
       `(${allowance.beta_days_left} days left). Nothing is charged, and there ` +
       'is no payment step yet \u2014 pricing starts when the beta ends. ' +
-      'Output carries an invisible provenance mark.');
+      (allowance.watermarked
+        ? 'Output carries an invisible provenance mark.'
+        : `Licensed to ${allowance.holder || allowance.tier}, so output ` +
+          'carries no mark.'));
     return;
   }
 
