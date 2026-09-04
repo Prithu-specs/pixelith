@@ -48,6 +48,10 @@ const el = {
   allowanceUpgrade:$('#allowance-upgrade'),
   paywall:$('#paywall'),
   paywallDetail:$('#paywall-detail'),
+  presetOut:$('#preset-out'),
+  presetScale:$('#preset-scale'),
+  presetDetail:$('#preset-detail'),
+  presetTicks:$('#preset-ticks'),
   pricePersonal:$('#price-personal'),
   priceCommercial:$('#price-commercial'),
   paywallTax:$('#paywall-tax'),
@@ -105,6 +109,7 @@ const jobViews = new Map();
 /** Model list from /api/models, and whether any of them are installed. */
 let models = [];
 let presets = {};
+let presetKeys = [];
 let online = null;          // null = unknown, true/false once established
 let failStreak = 0;         // consecutive transport failures; see setOnline()
 let submitting = false;
@@ -328,7 +333,7 @@ function readSettings() {
   return {
     model: currentModel(),
     targetMode: modeInput ? modeInput.value : 'preset',
-    preset: el.preset.value,
+    preset: currentPreset(),
     scale: parseFloat(el.scale.value),
     denoise: parseFloat(el.denoise.value),
     sharpen: parseFloat(el.sharpen.value),
@@ -374,7 +379,7 @@ function syncTargetMode() {
  */
 function targetPayload() {
   const mode = ($('input[name="target-mode"]:checked') || {}).value || 'preset';
-  if (mode === 'preset' && el.preset.value) return { preset: el.preset.value };
+  if (mode === 'preset' && currentPreset()) return { preset: currentPreset() };
   return { scale: parseFloat(el.scale.value) };
 }
 
@@ -485,27 +490,92 @@ async function loadPresets() {
   } catch {
     presets = {};
   }
-  const saved = loadSettings().preset;
-  el.preset.textContent = '';
-  const keys = Object.keys(presets);
+  presetKeys = Object.keys(presets);
 
-  if (!keys.length) {
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'Presets unavailable';
-    el.preset.appendChild(opt);
+  if (!presetKeys.length) {
     el.preset.disabled = true;
+    setText(el.presetOut, 'unavailable');
     return;
   }
+
   el.preset.disabled = false;
-  keys.forEach((key) => {
-    const [w, h] = presets[key] || [];
+  el.preset.min = '0';
+  el.preset.max = String(presetKeys.length - 1);
+
+  // Ticks under the track, one per stop.
+  el.presetScale.textContent = '';
+  el.presetTicks.textContent = '';
+  presetKeys.forEach((key, i) => {
+    const span = document.createElement('span');
+    span.textContent = prettyPreset(key);
+    el.presetScale.appendChild(span);
     const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = `${key.toUpperCase()} — ${w} × ${h}`;
-    el.preset.appendChild(opt);
+    opt.value = String(i);
+    opt.label = prettyPreset(key);
+    el.presetTicks.appendChild(opt);
   });
-  el.preset.value = keys.includes(saved) ? saved : (keys.includes('4k') ? '4k' : keys[0]);
+
+  const saved = loadSettings().preset;
+  const idx = presetKeys.indexOf(saved);
+  el.preset.value = String(idx >= 0 ? idx : Math.max(0, presetKeys.indexOf('4k')));
+  renderPreset();
+}
+
+/** "1080p" stays as it is; "4k" becomes "4K". */
+function prettyPreset(key) {
+  return /^\d+k$/i.test(key) ? key.toUpperCase() : key;
+}
+
+function currentPreset() {
+  return presetKeys[Number(el.preset.value)] || presetKeys[0] || '';
+}
+
+/**
+ * Reflect the slider: the chosen name, the size it produces for the staged
+ * file, and whether that is actually an upscale.
+ */
+function renderPreset() {
+  if (!presetKeys.length) return;
+  const key = currentPreset();
+  const idx = presetKeys.indexOf(key);
+  setText(el.presetOut, prettyPreset(key));
+
+  const [boxW, boxH] = presets[key] || [];
+  const probed = staged.find((it) => it.source && it.source.width);
+  const src = probed ? probed.source : null;
+
+  [...el.presetScale.children].forEach((span, i) => {
+    span.classList.toggle('is-current', i === idx);
+    if (src) {
+      const [bw, bh] = presets[presetKeys[i]] || [];
+      const r = Math.min(bw / src.width, bh / src.height);
+      span.classList.toggle('is-down', r <= 1);
+    } else {
+      span.classList.remove('is-down');
+    }
+  });
+
+  if (!src) {
+    setText(el.presetDetail, `Fits inside ${boxW} \u00d7 ${boxH}.`);
+    el.presetDetail.classList.remove('is-down');
+    return;
+  }
+
+  const ratio = Math.min(boxW / src.width, boxH / src.height);
+  const outW = Math.round(src.width * ratio);
+  const outH = Math.round(src.height * ratio);
+  const down = ratio <= 1;
+  // Equal size is neither an upscale nor a downscale; say so rather than
+  // claiming the target is smaller when it is identical.
+  const same = Math.abs(ratio - 1) < 0.005;
+  const note = same
+    ? ' \u2014 the same size as the source, so nothing is added'
+    : down
+      ? ' \u2014 smaller than the source, so this only resamples down'
+      : ` \u2014 ${ratio.toFixed(1)}\u00d7 larger`;
+  setText(el.presetDetail,
+    `${src.width} \u00d7 ${src.height} \u2192 ${outW} \u00d7 ${outH}${note}`);
+  el.presetDetail.classList.toggle('is-down', down);
 }
 
 /* -------------------------------------------------------------------------- *
@@ -621,6 +691,8 @@ function probeVideo(file) {
 }
 
 function renderQueue() {
+  // Source dimensions drive the size read-out and the downscale markers.
+  if (typeof renderPreset === 'function' && presetKeys.length) renderPreset();
   el.queueWrap.hidden = staged.length === 0;
   setText(el.queueCount, staged.length ? String(staged.length) : '');
   el.queue.textContent = '';
@@ -1563,7 +1635,11 @@ function wireSettings() {
     input.addEventListener('change', () => { saveSettings(); scheduleEstimate(); });
   });
 
-  el.preset.addEventListener('change', () => { saveSettings(); scheduleEstimate(); });
+  // input fires while dragging so the readout tracks the thumb; change commits.
+  el.preset.addEventListener('input', renderPreset);
+  el.preset.addEventListener('change', () => {
+    renderPreset(); saveSettings(); scheduleEstimate();
+  });
   [el.imageFormat, el.videoFormat].forEach((sel) => sel.addEventListener('change', saveSettings));
 
   el.clearQueue.addEventListener('click', () => {
@@ -1588,12 +1664,10 @@ function markSettingsUnavailable() {
     el.models.appendChild(p);
   }
   if (!Object.keys(presets).length) {
-    el.preset.textContent = '';
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'Unavailable — server offline';
-    el.preset.appendChild(opt);
     el.preset.disabled = true;
+    el.presetScale.textContent = '';
+    setText(el.presetOut, 'unavailable');
+    setText(el.presetDetail, 'Resolutions load once the server is reachable.');
   }
 }
 

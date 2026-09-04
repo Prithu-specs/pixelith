@@ -91,13 +91,30 @@ MODELS: dict[str, ModelSpec] = {
 DEFAULT_MODEL = "fast"
 
 # Named output targets. Height is the authoritative axis; width follows aspect.
+# The resolution ladder, ascending. Order matters: the interface presents these
+# as a slider, so the sequence here is the sequence the user scrolls through.
 PRESETS: dict[str, tuple[int, int]] = {
-    "hd": (1920, 1080),
+    "180p": (320, 180),
+    "360p": (640, 360),
+    "480p": (854, 480),
+    "720p": (1280, 720),
+    "1080p": (1920, 1080),
     "2k": (2560, 1440),
     "4k": (3840, 2160),
     "6k": (6144, 3456),
     "8k": (7680, 4320),
 }
+
+# Older builds called 1080p "hd". Accepted so saved settings and existing links
+# keep working.
+PRESET_ALIASES: dict[str, str] = {"hd": "1080p", "fhd": "1080p", "1440p": "2k",
+                                  "2160p": "4k", "4320p": "8k"}
+
+
+def resolve_preset(name: str) -> str:
+    """Canonical preset key for a user-supplied name."""
+    key = name.strip().lower()
+    return PRESET_ALIASES.get(key, key)
 
 # Above this many output pixels a still image is streamed tile-by-tile to disk
 # rather than assembled in RAM.

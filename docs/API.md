@@ -17,8 +17,13 @@ static (no build step). All endpoints below are under `/api`.
 ```
 
 ## GET /api/presets
+Returned in ascending order. The interface presents them as a slider, so the
+order of the keys is the order of the steps. `hd` is accepted as an alias for
+`1080p`.
 ```json
-{"hd":[1920,1080],"2k":[2560,1440],"4k":[3840,2160],"6k":[6144,3456],"8k":[7680,4320]}
+{"180p":[320,180],"360p":[640,360],"480p":[854,480],"720p":[1280,720],
+ "1080p":[1920,1080],"2k":[2560,1440],"4k":[3840,2160],"6k":[6144,3456],
+ "8k":[7680,4320]}
 ```
 
 ## POST /api/estimate
@@ -40,7 +45,7 @@ Response:
 `warning` is `null` when there is nothing to flag.
 
 ## POST /api/jobs   (multipart/form-data)
-Fields: `file` (required), `model` (`fast`|`quality`), `preset` (`hd`…`8k`, optional),
+Fields: `file` (required), `model` (`fast`|`quality`), `preset` (`180p`…`8k`, optional),
 `scale` (float, optional — used when `preset` is absent), `denoise` (0–1),
 `sharpen` (0–1), `format` (`png`|`jpg`|`webp` for images; `mp4`|`mov` for video).
 

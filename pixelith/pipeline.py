@@ -21,7 +21,8 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from . import compat  # registers the HEIF opener as a side effect
 from . import licensing, watermark
-from .config import LARGE_IMAGE_PIXELS, MODELS, PRESETS, UpscaleSettings
+from .config import (LARGE_IMAGE_PIXELS, MODELS, PRESETS, UpscaleSettings,
+                     resolve_preset)
 from .engine import Engine
 
 Image.MAX_IMAGE_PIXELS = None  # we do our own size guarding
@@ -62,7 +63,7 @@ def plan(
         raise ValueError("source dimensions must be positive")
 
     if preset:
-        key = preset.lower()
+        key = resolve_preset(preset)
         if key not in PRESETS:
             raise ValueError(f"unknown preset {preset!r}; try {sorted(PRESETS)}")
         box_w, box_h = PRESETS[key]

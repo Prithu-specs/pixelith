@@ -11,7 +11,8 @@ import time
 from pathlib import Path
 
 from . import __version__, license_info
-from .config import MODELS, OUTPUT_DIR, PRESETS, WORK_DIR, UpscaleSettings
+from .config import (MODELS, OUTPUT_DIR, PRESETS, WORK_DIR, UpscaleSettings,
+                     resolve_preset)
 from .engine import Cancelled, Engine, available_providers, choose_providers
 from . import licensing, watermark
 from .models import ensure, status as model_status
@@ -369,8 +370,12 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("input")
     u.add_argument("-o", "--output")
     u.add_argument("-m", "--model", default="fast", choices=sorted(MODELS))
-    u.add_argument("-p", "--preset", choices=sorted(PRESETS),
-                   help="target resolution (hd, 2k, 4k, 6k, 8k)")
+    # Ladder order, not alphabetical: sorted() would list 1080p before 180p.
+    # `type` runs before the choices check, so aliases such as "hd" resolve
+    # to a canonical key and are accepted here exactly as the API accepts them.
+    u.add_argument("-p", "--preset", type=resolve_preset, choices=list(PRESETS),
+                   metavar="{" + ",".join(PRESETS) + "}",
+                   help="target resolution, smallest to largest")
     u.add_argument("-s", "--scale", type=float, help="scale factor, e.g. 2 or 3.5")
     u.add_argument("--denoise", type=float, default=0.0)
     u.add_argument("--sharpen", type=float, default=0.0)

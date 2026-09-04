@@ -161,12 +161,16 @@
           </div>
 
           <div id="preset-pane" class="pane">
-            <label class="field__label field__label--sub" for="preset">Resolution</label>
-            <div class="select-wrap">
-              <select id="preset" name="preset">
-                <option value="">Loading…</option>
-              </select>
+            <div class="slider-head">
+              <label class="field__label field__label--sub" for="preset">Resolution</label>
+              <output class="reso__value" id="preset-out" for="preset">4K</output>
             </div>
+            <input type="range" id="preset" name="preset" min="0" max="8" step="1"
+                   value="6" list="preset-ticks"
+                   aria-describedby="preset-detail">
+            <datalist id="preset-ticks"></datalist>
+            <div class="reso__scale" id="preset-scale" aria-hidden="true"></div>
+            <p class="reso__detail" id="preset-detail"></p>
             <p class="hint">The longest edge is fitted to this target; aspect ratio is kept.</p>
           </div>
 
