@@ -763,7 +763,30 @@ Pixelith is **copyright &copy; 2026 PGA Tech Solutions** and is licensed under t
 It is **source-available, not open source**. You can read the code, study it and
 modify it for your own use. Reading it does not grant rights beyond the licence.
 
+### Public beta &mdash; free and unlimited until 4 December 2026
+
+**Pixelith is in public beta.** Until **4 December 2026** it is free and
+unlimited for everyone, personal and commercial alike. No allowance is applied,
+nothing is charged, and there is no payment step in the app.
+
+**A payment section will be added once the beta ends**, three months from its
+start on 4 September 2026. The prices below are what it will cost from then.
+
+Work you produce during the beta stays yours, with no retrospective charge.
+Continuing to use Pixelith after the beta closes is what needs a licence.
+
+Usage is still counted locally so you can see where you would stand, and free
+output still carries the provenance mark. Neither limits what you can do during
+the beta.
+
+Being a beta, expect rough edges. Bug reports and feedback are genuinely
+wanted &mdash; [open an issue](https://github.com/Prithu-specs/pixelith/issues).
+
+---
+
 ### Pricing
+
+Pricing from 4 December 2026:
 
 | Tier | India | Elsewhere | Covers |
 |---|---|---|---|

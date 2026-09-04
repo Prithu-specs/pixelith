@@ -220,10 +220,16 @@ def allowance_status() -> dict:
     """Where this install stands. Safe to show in any interface."""
     from . import FREE_IMAGE_COUNT, FREE_VIDEO_BYTES
 
+    from . import beta_active, beta_days_left, BETA_ENDS
+
     tier = current_tier()
     usage = load_usage()
-    unlimited = tier in PAID_TIERS
+    in_beta = beta_active()
+    unlimited = in_beta or tier in PAID_TIERS
     return {
+        "beta": in_beta,
+        "beta_ends": BETA_ENDS if in_beta else None,
+        "beta_days_left": beta_days_left() if in_beta else None,
         "tier": tier,
         "licensed": unlimited,
         "holder": (active_licence() or {}).get("holder"),
@@ -236,15 +242,24 @@ def allowance_status() -> dict:
         "video_bytes_limit": None if unlimited else FREE_VIDEO_BYTES,
         "video_bytes_remaining": None if unlimited
         else max(0, FREE_VIDEO_BYTES - usage.video_bytes),
-        "watermarked": not unlimited,
+        # Free-tier output is still marked during the beta: the mark is what
+        # makes provenance work later, and it is disclosed either way.
+        "watermarked": tier not in PAID_TIERS,
         "tampered": bool(getattr(usage, "tampered", False)),
     }
 
 
 def check_allowance(kind: str, video_bytes: int = 0) -> None:
-    """Raise AllowanceExceeded if this job is not permitted. Call before work."""
-    from . import FREE_IMAGE_COUNT, FREE_VIDEO_BYTES
+    """Raise AllowanceExceeded if this job is not permitted. Call before work.
 
+    Nothing is refused during the public beta. Usage is still counted, so the
+    meters stay meaningful and everyone can see where they would have stood,
+    but no job is blocked and nothing is charged.
+    """
+    from . import FREE_IMAGE_COUNT, FREE_VIDEO_BYTES, beta_active
+
+    if beta_active():
+        return
     if current_tier() in PAID_TIERS:
         return
     usage = load_usage()

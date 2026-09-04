@@ -20,6 +20,17 @@ def isolated(tmp_path, monkeypatch):
     yield
 
 
+@pytest.fixture
+def beta_over(monkeypatch):
+    """Close the beta, so the allowance rules actually apply.
+
+    The limits are suspended for the beta window, but the enforcement they
+    will do afterwards still has to be tested - that is the whole mechanism.
+    """
+    monkeypatch.setattr(pixelith, "beta_active", lambda: False)
+    yield
+
+
 def signed_key(tier="personal", holder="Test"):
     """Sign a key the way the issuing tool does, if the private key is present."""
     from pathlib import Path
@@ -104,39 +115,39 @@ def test_install_id_is_stable_across_reads():
 # ------------------------------------------------------------- the allowance
 
 
-def test_free_tier_permits_work_below_the_limit():
+def test_free_tier_permits_work_below_the_limit(beta_over):
     L.record(images=pixelith.FREE_IMAGE_COUNT - 1)
     L.check_allowance("image")              # must not raise
 
 
-def test_free_tier_blocks_the_image_limit():
+def test_free_tier_blocks_the_image_limit(beta_over):
     L.record(images=pixelith.FREE_IMAGE_COUNT)
     with pytest.raises(L.AllowanceExceeded) as exc:
         L.check_allowance("image")
     assert "$10" in str(exc.value) and "$200" in str(exc.value)
 
 
-def test_free_tier_blocks_the_video_limit():
+def test_free_tier_blocks_the_video_limit(beta_over):
     L.record(video_bytes=pixelith.FREE_VIDEO_BYTES)
     with pytest.raises(L.AllowanceExceeded):
         L.check_allowance("video", video_bytes=1)
 
 
-def test_a_video_that_would_overshoot_is_refused_before_it_starts():
+def test_a_video_that_would_overshoot_is_refused_before_it_starts(beta_over):
     """Refuse up front rather than half-processing a file and then stopping."""
     L.record(video_bytes=pixelith.FREE_VIDEO_BYTES - 1000)
     with pytest.raises(L.AllowanceExceeded):
         L.check_allowance("video", video_bytes=5000)
 
 
-def test_the_two_allowances_are_independent():
+def test_the_two_allowances_are_independent(beta_over):
     L.record(images=pixelith.FREE_IMAGE_COUNT)      # images exhausted
     L.check_allowance("video", video_bytes=1000)    # video still fine
     with pytest.raises(L.AllowanceExceeded):
         L.check_allowance("image")
 
 
-def test_a_paid_licence_removes_both_limits():
+def test_a_paid_licence_removes_both_limits(beta_over):
     L.record(images=10_000, video_bytes=pixelith.FREE_VIDEO_BYTES * 5)
     L.activate(signed_key("personal"))
     L.check_allowance("image")
@@ -146,4 +157,33 @@ def test_a_paid_licence_removes_both_limits():
 def test_allowance_status_reports_the_watermark_state():
     assert L.allowance_status()["watermarked"] is True
     L.activate(signed_key("commercial"))
+    assert L.allowance_status()["watermarked"] is False
+
+
+# ------------------------------------------------------------- public beta --
+
+
+def test_nothing_is_blocked_during_the_beta():
+    L.record(images=10_000, video_bytes=pixelith.FREE_VIDEO_BYTES * 50)
+    L.check_allowance("image")
+    L.check_allowance("video", video_bytes=10**12)
+
+
+def test_usage_is_still_counted_during_the_beta():
+    """The meters must stay meaningful, so people can see where they stand."""
+    L.record(images=7, video_bytes=2048)
+    st = L.allowance_status()
+    assert st["beta"] is True
+    assert st["images_used"] == 7
+    assert st["video_bytes_used"] == 2048
+    assert st["beta_days_left"] > 0
+
+
+def test_free_output_is_still_marked_during_the_beta():
+    """Provenance marking is what makes the paid tiers meaningful later."""
+    assert L.allowance_status()["watermarked"] is True
+
+
+def test_a_paid_licence_still_removes_the_mark_during_the_beta():
+    L.activate(signed_key("personal"))
     assert L.allowance_status()["watermarked"] is False

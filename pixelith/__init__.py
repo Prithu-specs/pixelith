@@ -4,11 +4,39 @@
 # is required. See LICENSE.
 """Pixelith - AI image and video upscaling, up to 8K."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0b1"
 
 # Licensing identity. Surfaced by the CLI, the HTTP API and the web UI so that
 # anyone running Pixelith is on notice about the terms, not just anyone who
 # happens to open the LICENSE file.
+# ---------------------------------------------------------------- beta ----
+# During the public beta the paid tiers exist on paper but nothing is charged
+# and no allowance is enforced. Payment goes in once the beta closes.
+BETA = True
+BETA_STARTED = "2026-09-04"
+BETA_ENDS = "2026-12-04"          # three months
+
+
+def beta_active() -> bool:
+    """True while the beta window is open. Fails closed after the end date."""
+    if not BETA:
+        return False
+    from datetime import date
+
+    try:
+        y, m, d = (int(x) for x in BETA_ENDS.split("-"))
+        return date.today() <= date(y, m, d)
+    except ValueError:
+        return False
+
+
+def beta_days_left() -> int:
+    from datetime import date
+
+    y, m, d = (int(x) for x in BETA_ENDS.split("-"))
+    return max(0, (date(y, m, d) - date.today()).days)
+
+
 LICENSE_ID = "LicenseRef-Pixelith-EULA-1.0"
 LICENSE_NAME = "Pixelith End User Licence Agreement 1.0"
 LICENSE_URL = "https://github.com/Prithu-specs/pixelith/blob/main/LICENSE"
@@ -157,6 +185,16 @@ def license_info() -> dict:
             "video_bytes": FREE_VIDEO_BYTES,
         },
         "tiers": [dict(t) for t in TIERS],
+        "beta": {
+            "active": beta_active(),
+            "started": BETA_STARTED,
+            "ends": BETA_ENDS,
+            "days_left": beta_days_left(),
+            "note": (
+                "Free and unlimited during the public beta. Payment will be "
+                "introduced once the beta ends."
+            ),
+        },
         "pricing": pricing(),
         "default_currency": DEFAULT_CURRENCY,
         # The allowance is measured and enforced locally; free output is

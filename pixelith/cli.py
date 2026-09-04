@@ -88,10 +88,20 @@ def cmd_info(args: argparse.Namespace) -> int:
 def cmd_license(args: argparse.Namespace) -> int:
     from . import CURRENCIES, TIERS, tier_price
 
+    from . import BETA_ENDS, beta_active, beta_days_left
+
     lic = license_info()
     print(f"{lic['name']}")
     print(f"{lic['copyright']}")
     print()
+    if beta_active():
+        print(f"  PUBLIC BETA - free and unlimited until {BETA_ENDS} "
+              f"({beta_days_left()} days left).")
+        print("  Nothing is charged today and there is no payment step in the")
+        print("  app. The prices below take effect when the beta ends; a")
+        print("  payment section will be added before then. Work you produce")
+        print("  during the beta stays yours, with no retrospective charge.")
+        print()
     print(f"  {'Tier':<12} {'India':>10} {'Elsewhere':>11}   What it covers")
     print(f"  {'-' * 12} {'-' * 10} {'-' * 11}   {'-' * 44}")
     for t in TIERS:
@@ -143,6 +153,19 @@ def _fmt_bytes(n: int) -> str:
 
 def cmd_status(args: argparse.Namespace) -> int:
     st = licensing.allowance_status()
+    if st.get("beta"):
+        print(f"Public beta - free and unlimited until {st['beta_ends']} "
+              f"({st['beta_days_left']} days left)")
+        print("  images   unlimited during the beta "
+              f"({st['images_used']} used so far)")
+        print("  video    unlimited during the beta "
+              f"({_fmt_bytes(st['video_bytes_used'])} used so far)")
+        print("  output   carries an invisible provenance mark")
+        print()
+        print("  Nothing is charged and there is no payment step. Pricing")
+        print("  starts when the beta ends; see 'pixelith license'.")
+        print(f"\n  install {st['install_id']}")
+        return 0
     if st["licensed"]:
         holder = st["holder"] or "unnamed"
         print(f"Licensed: {st['tier']} - {holder}")

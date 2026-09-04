@@ -1379,6 +1379,15 @@ function fmtBytes(n) {
   return `${Math.round(n / 1024)} KB`;
 }
 
+/** A plain read-out with no bar, for when there is no limit to fill. */
+function counted(label, value) {
+  const row = document.createElement('div');
+  row.className = 'meter';
+  row.innerHTML =
+    `<div class="meter__row"><span>${label}</span><span>${value} so far</span></div>`;
+  return row;
+}
+
 function meter(label, used, limit, fmt) {
   const pct = limit ? Math.min(100, (used / limit) * 100) : 0;
   const cls = pct >= 100 ? 'meter meter--full' : pct >= 80 ? 'meter meter--warn' : 'meter';
@@ -1396,6 +1405,19 @@ function renderAllowance() {
   el.allowance.hidden = false;
   const meters = el.allowanceMeters;
   meters.textContent = '';
+
+  if (allowance.beta) {
+    setText(el.allowanceTier, 'Public beta');
+    el.allowanceUpgrade.hidden = true;
+    meters.appendChild(counted('Images', `${allowance.images_used}`));
+    meters.appendChild(counted('Video', fmtBytes(allowance.video_bytes_used)));
+    setText(el.allowanceNote,
+      `Free and unlimited until ${allowance.beta_ends} ` +
+      `(${allowance.beta_days_left} days left). Nothing is charged, and there ` +
+      'is no payment step yet \u2014 pricing starts when the beta ends. ' +
+      'Output carries an invisible provenance mark.');
+    return;
+  }
 
   if (allowance.licensed) {
     setText(el.allowanceTier,
@@ -1428,6 +1450,15 @@ async function loadAllowance() {
 function openPaywall(detail) {
   const dlg = el.paywall;
   if (!dlg) return;
+  /* During the beta this dialog explains what pricing will be, rather than
+     asking anyone to pay - there is nothing to buy yet. */
+  if (allowance && allowance.beta) {
+    setText(el.paywallDetail,
+      'Pixelith is free and unlimited during the public beta, which runs to ' +
+      `${allowance.beta_ends}. There is nothing to buy yet: a payment section ` +
+      'will be added once the beta ends. The prices below are what it will ' +
+      'cost then.');
+  }
   if (detail) {
     if (detail.allowance) { allowance = detail.allowance; renderAllowance(); }
     setText(el.paywallDetail, detail.detail
