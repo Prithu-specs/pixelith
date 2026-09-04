@@ -125,9 +125,10 @@ not grant you rights beyond those set out below.
 
 4A.2 Indian sales are made by PGA Tech Solutions directly. PGA Tech Solutions
      is registered for GST in India (GSTIN: 09AIAPG7383C1ZE). Prices shown in
-     rupees are inclusive of GST at the applicable rate, currently 18% on
-     software licences (SAC 997331). A tax invoice showing the GST charged is
-     issued for every Indian sale.
+     rupees are exclusive of GST. GST at the applicable rate, currently 18% on
+     software licences (SAC 997331), is added at checkout, and the amount
+     payable including GST is shown before you pay. A tax invoice showing the
+     GST charged is issued for every Indian sale.
 
 4A.3 Sales outside India may be made through a third-party reseller acting as
      merchant of record. Where that is so, the reseller is the seller for tax
@@ -139,10 +140,11 @@ not grant you rights beyond those set out below.
      zero-rated under Indian GST, supplied under Letter of Undertaking without
      payment of IGST.
 
-4A.5 Rupee prices include Indian GST. Prices in other currencies are exclusive
-     of any local tax, which is added at checkout by the merchant of record. We
-     may change prices for future purchases; a licence already granted is not
-     affected.
+4A.5 All prices are exclusive of tax. Indian GST is added at checkout by us;
+     tax outside India is added at checkout by the merchant of record. No
+     separate charge is made for payment processing: the price is the price,
+     plus tax. We may change prices for future purchases; a licence already
+     granted is not affected.
 
 
 5. WHAT ALL TIERS ALLOW AND FORBID

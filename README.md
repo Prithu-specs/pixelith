@@ -743,14 +743,17 @@ modify it for your own use. Reading it does not grant rights beyond the licence.
 | Tier | India | Elsewhere | Covers |
 |---|---|---|---|
 | **Free** | &mdash; | &mdash; | Personal use, **100 images** and **1 GB of video input** |
-| **Personal** | **&#8377;499** | **$10** | One person, all their devices. Unlimited, for life |
-| **Commercial** | **&#8377;7,999** | **$200** | One company. Any commercial use, unlimited, for life |
+| **Personal** | **&#8377;499** + GST | **$10** | One person, all their devices. Unlimited, for life |
+| **Commercial** | **&#8377;7,999** + GST | **$200** | One company. Any commercial use, unlimited, for life |
+
+Indian buyers pay &#8377;589 and &#8377;9,439 respectively, including 18% GST.
 
 One-time payments. Nothing to renew, no subscription, no expiry.
 
 Pixelith is made by PGA Tech Solutions, a sole proprietorship in Uttar Pradesh,
-India (GSTIN `09AIAPG7383C1ZE`). **Rupee prices include 18% GST** (SAC 997331)
-and a tax invoice is issued; prices elsewhere are exclusive of local tax, which is
+India (GSTIN `09AIAPG7383C1ZE`). **Rupee prices are exclusive of GST**; 18% GST
+(SAC 997331) is added at checkout, the all-in total is shown before you pay, and
+a tax invoice is issued; prices elsewhere are exclusive of local tax, which is
 added at checkout and are exports of service zero-rated under LUT. Which price
 applies depends on where you or your organisation are established.
 

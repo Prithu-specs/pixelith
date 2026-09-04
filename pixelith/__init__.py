@@ -46,10 +46,11 @@ CURRENCIES = {
         "region": "India",
         "personal": 499,
         "commercial": 7999,
-        # Consumer prices in India are shown inclusive of tax, so these are the
-        # amounts actually charged. GST is broken out on the tax invoice.
-        "tax_included": True,
-        "tax_label": "incl. 18% GST",
+        # Quoted exclusive of GST, which is added at checkout and shown on the
+        # tax invoice. The all-in figure is published too, so nobody is
+        # surprised by the total at the payment step.
+        "tax_included": False,
+        "tax_label": "+ 18% GST",
         "note": "Pay by UPI, card or net banking. Tax invoice issued.",
     },
     "USD": {
@@ -82,6 +83,14 @@ def pricing() -> dict:
             **{k: v for k, v in data.items()},
             "personal_url": _pay_url(code, "personal"),
             "commercial_url": _pay_url(code, "commercial"),
+            "personal_total": (
+                round(data["personal"] * (1 + GST_RATE))
+                if code == "INR" else data["personal"]
+            ),
+            "commercial_total": (
+                round(data["commercial"] * (1 + GST_RATE))
+                if code == "INR" else data["commercial"]
+            ),
         }
     return out
 
@@ -118,7 +127,17 @@ def tier_price(tier: str, currency: str = DEFAULT_CURRENCY) -> str:
     cur = CURRENCIES.get(currency, CURRENCIES[DEFAULT_CURRENCY])
     if tier == "free":
         return "free"
+    return f"{cur['symbol']}{cur[tier]:,}"
+
+
+def tier_total(tier: str, currency: str = DEFAULT_CURRENCY) -> str:
+    """What the buyer actually pays, tax included."""
+    cur = CURRENCIES.get(currency, CURRENCIES[DEFAULT_CURRENCY])
+    if tier == "free":
+        return "free"
     amount = cur[tier]
+    if not cur.get("tax_included") and currency == "INR":
+        amount = round(amount * (1 + GST_RATE))
     return f"{cur['symbol']}{amount:,}"
 
 

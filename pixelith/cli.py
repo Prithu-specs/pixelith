@@ -97,8 +97,13 @@ def cmd_license(args: argparse.Namespace) -> int:
         print(f"  {t['name']:<12} {tier_price(t['key'], 'INR'):>10} "
               f"{tier_price(t['key'], 'USD'):>11}   {t['summary']}")
     print()
-    print("  Indian prices are paid in rupees by UPI, card or net banking.")
-    print("  Elsewhere, local taxes are handled at checkout.")
+    from . import tier_total
+    print(f"  Indian prices are exclusive of 18% GST: "
+          f"{tier_price('personal','INR')} + GST = {tier_total('personal','INR')}, "
+          f"{tier_price('commercial','INR')} + GST = {tier_total('commercial','INR')}.")
+    print("  Paid by UPI, card or net banking; tax invoice issued.")
+    print("  Elsewhere, local taxes are added at checkout.")
+    print("  There is no separate payment-processing charge.")
     print()
     print("The free allowance is 100 still images and 1 GB of video input.")
     print("The two are independent - running out of one does not consume the")

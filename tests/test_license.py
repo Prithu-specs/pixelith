@@ -105,16 +105,33 @@ def test_published_prices_match_the_licence_text():
     assert (usd["personal"], usd["commercial"]) == (10, 200)
 
 
-def test_indian_prices_are_shown_inclusive_of_gst():
-    """Indian consumer prices must be tax-inclusive; the licence must say so."""
+def test_indian_prices_are_quoted_exclusive_of_gst():
+    """Prices are ex-GST, but the all-in total must be published alongside."""
     inr = pixelith.CURRENCIES["INR"]
-    assert inr["tax_included"] is True
+    assert inr["tax_included"] is False
     assert "GST" in inr["tax_label"]
-    assert pixelith.CURRENCIES["USD"]["tax_included"] is False
 
     licence = licence_text()
-    assert "inclusive of GST" in licence
-    assert "997331" in licence or pixelith.GST_SAC in licence
+    assert "exclusive of GST" in licence
+    assert "including GST is shown before you pay" in licence
+    assert pixelith.GST_SAC in licence
+
+
+def test_the_all_in_total_is_computed_and_published():
+    p = pixelith.pricing()["INR"]
+    assert p["personal_total"] == round(499 * 1.18) == 589
+    assert p["commercial_total"] == round(7999 * 1.18) == 9439
+    assert pixelith.tier_total("personal", "INR") == "\u20b9589"
+    # Dollar prices carry no Indian GST, so total equals price.
+    usd = pixelith.pricing()["USD"]
+    assert usd["personal_total"] == usd["personal"] == 10
+
+
+def test_no_separate_payment_processing_charge_is_levied():
+    """RBI bars merchants from passing card and UPI costs to the customer, so
+    the agreement commits to not doing it."""
+    licence = licence_text()
+    assert "No separate charge is made for payment processing" in licence
 
 
 def test_export_sales_are_described_as_zero_rated():

@@ -1276,7 +1276,12 @@ function applyCurrency(code) {
   const p = pricing[code];
   setText(el.pricePersonal, money(code, p.personal));
   setText(el.priceCommercial, money(code, p.commercial));
-  setText(el.paywallTax, p.tax_label || '');
+  // Show the all-in total as well, so the checkout amount is never a surprise.
+  const label = p.tax_included || p.personal_total === p.personal
+    ? (p.tax_label || '')
+    : `${p.tax_label} \u2014 ${money(code, p.personal_total)} and ` +
+      `${money(code, p.commercial_total)} all in`;
+  setText(el.paywallTax, label);
   document.querySelectorAll('.paywall__region-btn').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.currency === code));
   });
