@@ -21,6 +21,43 @@ honest set of numbers about how long things take.
 
 ---
 
+## Beta testers start here
+
+Pixelith is free and unlimited until **5 December 2026**. No account, no payment
+step, nothing leaves your machine.
+
+```bash
+git clone https://github.com/Prithu-specs/pixelith.git
+cd pixelith
+python3 -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m pixelith serve
+```
+
+Open **http://127.0.0.1:8420**. Drop in a photo and press start. The model
+downloads itself on first use (4.6 MB).
+
+Add `--lan` and it prints an address you can open on your phone.
+
+**Three things worth trying, and worth telling us about:**
+
+1. **Preview one frame before a video job.** Video is slow &mdash; a minute of
+   1080p to 8K is about two hours &mdash; so the preview exists to answer "are
+   these the right settings" in seconds. Does it tell you what you need?
+2. **Start with a 5&ndash;10 second clip.** Not a whole video. Really.
+3. **Run it from your phone** against a computer on the same Wi-Fi. HEIC photos
+   from the camera roll work.
+
+Found something broken, or something that just felt wrong?
+[Open an issue](https://github.com/Prithu-specs/pixelith/issues/new/choose) —
+rough edges are the entire point of a beta, and "this was confusing" is as
+useful a report as a stack trace.
+
+FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
+`winget install Gyan.FFmpeg`. Photos work without it.
+
+---
+
 ## Contents
 
 - [Features](#features)
