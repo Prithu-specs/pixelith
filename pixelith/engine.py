@@ -173,6 +173,20 @@ class Engine:
         opts.intra_op_num_threads = threads
 
         providers = choose_providers(self.settings.providers or None, spec)
+
+        # Which provider wins depends on the machine, not just the model, so
+        # measure it once here rather than trusting a preference measured
+        # somewhere else. Explicit --providers skips this entirely.
+        if not self.settings.providers and len(providers) > 1:
+            try:
+                from .calibrate import choose as calibrated
+
+                best = calibrated(spec, path, providers, opts)
+                if best in providers:
+                    providers = [best] + [p for p in providers if p != best]
+            except Exception:  # noqa: BLE001 - fall back to the static order
+                pass
+
         try:
             self.session = ort.InferenceSession(str(path), opts, providers=providers)
         except Exception as exc:  # noqa: BLE001 - fall back rather than die

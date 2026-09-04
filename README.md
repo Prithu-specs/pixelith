@@ -91,9 +91,18 @@ browser can drive it.
 
 | Platform | Status | Notes |
 |---|---|---|
-| **Windows** 10/11 (x64, ARM64) | Supported | Prebuilt wheels for every dependency; no compiler needed |
-| **macOS** 12+ (Apple silicon, Intel) | Supported | Uses CoreML when it helps |
-| **Linux** (x86-64, aarch64) | Supported | glibc and musl wheels both published |
+| **Windows** 10/11 (x64, ARM64) | Verified in CI | Real upscale of an image and a video on every push |
+| **macOS** 12+ (Apple silicon, Intel) | Verified in CI | Uses CoreML where it measures faster |
+| **Linux** (x86-64, aarch64) | Verified in CI | glibc and musl wheels both published |
+
+Measured on the CI runners, which are modest 3-4 core machines and a fair proxy
+for an ordinary laptop:
+
+| Runner | Cores | RAM | Tile | 360p &rarr; 2560&times;1440 |
+|---|---|---|---|---|
+| Linux x86-64 | 4 | 15.6 GB | 1024 | **2.6 s** |
+| Windows x64 | 4 | 16.0 GB | 1024 | 3.4 s |
+| macOS arm64 | 3 | 7.0 GB | 512 | 6.1 s |
 | **Raspberry Pi 4/5** (64-bit) | Works, slowly | Fine for photos; do not attempt video |
 
 ### Uses it from a browser
@@ -155,6 +164,14 @@ usage is set by the tile size, which is chosen from your actual RAM:
 
 An 8K job used to peak at **3.9 GB** regardless of machine, which simply failed
 on anything small. It is now 2.3 GB at most and 450 MB at least.
+
+**The provider is measured, not assumed.** On first use Pixelith times each
+available execution provider on a small tile and keeps the winner, because which
+one wins depends on the machine as much as the model - the compact network is
+faster on plain CPU on a workstation, but on a three-core laptop the neural
+engine may well take it. It costs under a second, once. Run
+`pixelith recalibrate` to take the measurement again, or `pixelith info` to see
+what it chose.
 
 **Running without a GPU is the fast path for the compact model**, not a
 consolation. Because CPU tolerates a changing tile shape, it can run a few large

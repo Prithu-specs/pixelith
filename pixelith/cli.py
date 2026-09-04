@@ -15,7 +15,7 @@ from .config import (MODELS, OUTPUT_DIR, PRESETS, WORK_DIR, UpscaleSettings,
                      resolve_preset)
 from .engine import Cancelled, Engine, available_providers, choose_providers
 from . import licensing, watermark
-from .models import ensure, status as model_status
+from .models import ensure, is_available, status as model_status
 from .pipeline import estimate_seconds, human_time, plan, upscale_image
 from .video import VideoError, have_ffmpeg, probe, upscale_video
 
@@ -75,11 +75,18 @@ def cmd_info(args: argparse.Namespace) -> int:
           f"and {free['video_bytes'] // 1024**3} GB of video")
     print("               run 'pixelith license' for the full terms")
     print("\nModels:")
+    from .calibrate import cached as calibrated_provider
+
     for m in model_status():
         spec = MODELS[m["key"]]
         mark = "installed" if m["installed"] else f"not downloaded ({m['size_mb']} MB)"
         print(f"  {m['key']:8} {m['label']:34} x{m['scale']}  [{mark}]")
-        print(f"           runs on {choose_providers(spec=spec)[0]}")
+        measured = calibrated_provider(m["key"])
+        if measured:
+            print(f"           runs on {measured} (measured on this machine)")
+        else:
+            print(f"           runs on {choose_providers(spec=spec)[0]} "
+                  f"(measured on first use)")
         print(f"           {m['notes']}")
     print("\nPresets: " + ", ".join(f"{k} ({v[0]}x{v[1]})" for k, v in PRESETS.items()))
     return 0
@@ -246,6 +253,22 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if found["tier_name"] == "free":
         print("\n  This file was produced under the free tier, which does not")
         print("  permit commercial use.")
+    return 0
+
+
+def cmd_recalibrate(args: argparse.Namespace) -> int:
+    """Forget the measured provider choice and take it again."""
+    from .calibrate import forget
+    from .engine import Engine
+
+    forget()
+    print("Re-measuring on this machine...")
+    for key, spec in MODELS.items():
+        if not is_available(spec):
+            print(f"  {key:8} skipped, weights not downloaded")
+            continue
+        engine = Engine(spec, UpscaleSettings(model=key))
+        print(f"  {key:8} -> {engine.provider}  (tile {engine.tile})")
     return 0
 
 
@@ -433,6 +456,12 @@ def build_parser() -> argparse.ArgumentParser:
     ver = sub.add_parser("verify", help="read the provenance mark from an image")
     ver.add_argument("file")
     ver.set_defaults(func=cmd_verify)
+
+    cal = sub.add_parser(
+        "recalibrate",
+        help="re-measure which execution provider is fastest here",
+    )
+    cal.set_defaults(func=cmd_recalibrate)
 
     d = sub.add_parser("download", help="pre-download model weights")
     d.add_argument("models", nargs="*", choices=sorted(MODELS) + [])
