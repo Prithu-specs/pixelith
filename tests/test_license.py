@@ -254,13 +254,13 @@ def test_prior_polyform_rights_are_preserved():
     assert "0.1.x were released under the PolyForm" in licence_text()
 
 
-def test_governing_law_is_set_and_the_venue_is_complete():
-    """India is settled; the city for the courts clause is not."""
+def test_governing_law_and_venue_are_complete():
+    """No placeholder may survive in a published agreement."""
     licence = licence_text()
     assert "governed by the laws of India" in licence
-    if "[INSERT CITY]" in licence:
-        pytest.skip(
-            "the courts clause still needs a city - PGA Tech Solutions must "
-            "name the venue in Uttar Pradesh before relying on this agreement"
-        )
+    assert "Uttar Pradesh" in licence
     assert "exclusive jurisdiction" in licence
+    for placeholder in ("[INSERT", "[TO BE COMPLETED", "TBD", "XXX"):
+        assert placeholder not in licence, (
+            f"{placeholder!r} left in the licence"
+        )

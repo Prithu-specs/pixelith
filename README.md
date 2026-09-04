@@ -471,6 +471,31 @@ It is free, it is instant, and it will tell you when a job is unreasonable.
 
 ## Configuration
 
+### Checkout links
+
+The paywall links to a checkout page when one is configured, and falls back to
+emailing us when it is not. Set these before starting the server; no code change
+is needed.
+
+| Variable | Used for |
+|---|---|
+| `PIXELITH_PAY_INR_PERSONAL` | India, personal licence |
+| `PIXELITH_PAY_INR_COMMERCIAL` | India, commercial licence |
+| `PIXELITH_PAY_USD_PERSONAL` | Elsewhere, personal licence |
+| `PIXELITH_PAY_USD_COMMERCIAL` | Elsewhere, commercial licence |
+
+```bash
+export PIXELITH_PAY_INR_PERSONAL="https://your-gateway.example/personal"
+python -m pixelith serve
+```
+
+Licence keys are issued by us either way &mdash; see
+[`tools/issue_licence_key.py`](tools/issue_licence_key.py). Do not use a
+gateway's own licence-key feature: validating those keys would require the app
+to call the gateway's API, which breaks offline activation and contradicts
+clause 7 of the licence.
+
+
 Pixelith is configured entirely through two environment variables. There is no
 config file.
 
