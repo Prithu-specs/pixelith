@@ -331,6 +331,7 @@ def upscale_video(
         "elapsed": round(elapsed, 2),
         "seconds_per_frame": round(elapsed / processed, 3) if processed else None,
         "model": spec.key, "provider": eng.provider,
+        "providers": eng.active_providers,
         "audio": info.has_audio, "output": str(dest),
     }
 

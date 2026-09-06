@@ -16,15 +16,19 @@ from __future__ import annotations
 
 import json
 import platform
+import statistics
 import time
 
 from .config import CACHE_DIR, ModelSpec
 
 CALIBRATION_FILE = CACHE_DIR / "calibration.json"
 
-# Big enough to be representative, small enough to be quick.
-_PROBE = 192
-_REPS = 2
+# A small real-frame workload catches tile-grid, padding and dispatch costs that
+# a repeatedly cached square tile hides. This still finishes in a few seconds.
+_PROBE = 240
+_PROBE_WIDTH = 360
+_REPS = 3
+_FORMAT = 2
 
 
 def _machine_key() -> str:
@@ -50,7 +54,9 @@ def _save(data: dict) -> None:
 
 def cached(model_key: str) -> str | None:
     entry = _load().get(f"{_machine_key()}:{model_key}")
-    return entry.get("provider") if isinstance(entry, dict) else None
+    if isinstance(entry, dict) and entry.get("format") == _FORMAT:
+        return entry.get("provider")
+    return None
 
 
 def forget() -> None:
@@ -60,39 +66,72 @@ def forget() -> None:
 def measure(
     spec: ModelSpec, model_path, candidates: list[str], opts
 ) -> tuple[str, dict]:
-    """Time one tile through each candidate. Returns the winner and the times."""
+    """Time a representative tiled frame through every candidate."""
     import numpy as np
     import onnxruntime as ort
 
-    probe = np.ascontiguousarray(
-        np.random.rand(1, 3, _PROBE, _PROBE).astype(np.float32)
-    )
+    from .engine import pick_tile
+    from .hardware import configured, profile
+
+    rng = np.random.default_rng(0)
     timings: dict[str, float] = {}
 
     for provider in candidates:
         try:
-            chain = [provider]
+            chain: list = [configured(provider)]
             if provider != "CPUExecutionProvider":
                 chain.append("CPUExecutionProvider")
-            session = ort.InferenceSession(str(model_path), opts, providers=chain)
+            try:
+                session = ort.InferenceSession(
+                    str(model_path), opts, providers=chain
+                )
+            except Exception:
+                raw = [provider]
+                if provider != "CPUExecutionProvider":
+                    raw.append("CPUExecutionProvider")
+                session = ort.InferenceSession(str(model_path), opts, providers=raw)
             if session.get_providers()[0] != provider:
                 continue  # silently fell back; not a real candidate
+
             name = session.get_inputs()[0].name
-            session.run(None, {name: probe})          # warm up / compile
-            best = None
+            tile = pick_tile(provider, spec)
+            step = max(1, tile - 32)
+            shapes: list[tuple[int, int]] = []
+            for y in range(0, _PROBE, step):
+                for x in range(0, _PROBE_WIDTH, step):
+                    height = min(tile, _PROBE - y)
+                    width = min(tile, _PROBE_WIDTH - x)
+                    if profile(provider).stable_shape:
+                        height = width = tile
+                    shapes.append((height, width))
+
+            probes = {
+                shape: np.ascontiguousarray(
+                    rng.random((1, 3, *shape), dtype=np.float32)
+                )
+                for shape in set(shapes)
+            }
+            session.run(None, {name: probes[shapes[0]]})  # warm up / compile
+            samples: list[float] = []
             for _ in range(_REPS):
                 start = time.perf_counter()
-                session.run(None, {name: probe})
-                elapsed = time.perf_counter() - start
-                best = elapsed if best is None else min(best, elapsed)
-            timings[provider] = best
+                for shape in shapes:
+                    session.run(None, {name: probes[shape]})
+                samples.append(time.perf_counter() - start)
+            timings[provider] = statistics.median(samples)
             del session
         except Exception:  # noqa: BLE001 - an unusable provider is just skipped
             continue
 
     if not timings:
         return "CPUExecutionProvider", {}
-    winner = min(timings, key=timings.get)
+    fastest = min(timings.values())
+    # Do not let sub-millisecond noise reorder the model's known-good priority.
+    winner = next(
+        provider
+        for provider in candidates
+        if provider in timings and timings[provider] <= fastest * 1.05
+    )
     return winner, timings
 
 
@@ -101,14 +140,27 @@ def choose(spec: ModelSpec, model_path, candidates: list[str], opts) -> str:
     key = f"{_machine_key()}:{spec.key}"
     store = _load()
     entry = store.get(key)
-    if isinstance(entry, dict) and entry.get("provider") in candidates:
+    if (
+        isinstance(entry, dict)
+        and entry.get("format") == _FORMAT
+        and entry.get("provider") in candidates
+    ):
         return entry["provider"]
 
     winner, timings = measure(spec, model_path, candidates, opts)
     store[key] = {
+        "format": _FORMAT,
         "provider": winner,
+        "tile": pick_tile_for_cache(spec, winner),
         "seconds": {k: round(v, 4) for k, v in timings.items()},
         "measured": time.time(),
     }
     _save(store)
     return winner
+
+
+def pick_tile_for_cache(spec: ModelSpec, provider: str) -> int:
+    """Late import avoids an engine/calibration import cycle at module load."""
+    from .engine import pick_tile
+
+    return pick_tile(provider, spec)

@@ -22,6 +22,7 @@ from . import __version__, license_info, pricing
 from . import DEFAULT_CURRENCY as _DEFAULT_CURRENCY
 from .config import MODELS, PRESETS, WORK_DIR, UpscaleSettings
 from .engine import available_providers, choose_providers
+from .hardware import describe as describe_hardware
 from . import licensing, preview as preview_mod
 from .compat import summary as platform_summary
 from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
@@ -55,10 +56,13 @@ class EstimateRequest(BaseModel):
 
 @app.get("/api/health")
 def health() -> dict:
+    available = available_providers()
     return {
         "status": "ok",
         "version": __version__,
-        "providers": available_providers(),
+        "providers": available,
+        "hardware": describe_hardware(available),
+        "heterogeneous": True,
         "ffmpeg": have_ffmpeg(),
         "active": {k: choose_providers(spec=s)[0] for k, s in MODELS.items()},
         # Published so clients can reject a file before spending an upload on it.

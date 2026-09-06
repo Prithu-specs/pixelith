@@ -268,7 +268,8 @@ def cmd_recalibrate(args: argparse.Namespace) -> int:
             print(f"  {key:8} skipped, weights not downloaded")
             continue
         engine = Engine(spec, UpscaleSettings(model=key))
-        print(f"  {key:8} -> {engine.provider}  (tile {engine.tile})")
+        active = " + ".join(engine.active_providers)
+        print(f"  {key:8} -> {active}  (tile {engine.tile})")
     return 0
 
 
@@ -304,7 +305,7 @@ def cmd_upscale(args: argparse.Namespace) -> int:
     settings = UpscaleSettings(
         model=args.model, preset=args.preset, scale=args.scale,
         denoise=args.denoise, sharpen=args.sharpen, quality=args.quality,
-        tile=args.tile,
+        tile=args.tile, hybrid=not args.single_device,
     )
     spec = settings.resolved_model()
     is_video = src.suffix.lower() not in IMAGE_SUFFIXES
@@ -433,6 +434,11 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--sharpen", type=float, default=0.0)
     u.add_argument("--quality", type=int, default=95, help="JPEG/WebP quality")
     u.add_argument("--tile", type=int, help="tile size override")
+    u.add_argument(
+        "--single-device",
+        action="store_true",
+        help="disable automatic CPU/GPU/NPU cooperation",
+    )
     u.add_argument("-y", "--yes", action="store_true",
                    help="do not prompt before long jobs")
     u.set_defaults(func=cmd_upscale)

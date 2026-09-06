@@ -260,6 +260,7 @@ def upscale_image(
         "elapsed": round(time.time() - started, 2),
         "model": spec.key,
         "provider": eng.provider,
+        "providers": eng.active_providers,
         "output": str(dest),
         "had_alpha": alpha is not None,
         "source_mode": mode,

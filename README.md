@@ -86,9 +86,10 @@ FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
   63.9 MB RRDBNet for detail. No sprawling model zoo to guess your way through.
 - **Verified weights.** Models download on first use from Hugging Face and are
   checked against a pinned SHA-256 digest before they are ever loaded.
-- **Per-model hardware selection.** The execution provider is chosen per network,
-  not globally, because the fastest runtime genuinely differs between the two
-  (see [Performance](#performance)).
+- **Adaptive CPU, GPU and NPU execution.** Core ML, Android NNAPI and Intel
+  OpenVINO may coordinate several compute units inside one runtime. Independent
+  accelerators can share a dynamic tile queue with the CPU, so the faster device
+  naturally performs more work instead of receiving an equal split.
 - **Seamless tiling.** Overlapping tiles blended with a feathered weight mask, so
   no grid artefacts even on very large images.
 - **Preview one frame before you commit.** A video job can run for hours; this
@@ -178,6 +179,15 @@ Pixelith adapts to the machine it finds. It picks the execution provider *and*
 the tile size together, because the two interact: on a CPU-only machine, using
 the tile size that suits a neural engine costs about **2x** the runtime. Choosing
 correctly is automatic.
+
+On Apple hardware, Core ML is configured with all compute units enabled, which
+allows the operating system to use the CPU, GPU and Neural Engine. Intel
+OpenVINO uses `AUTO` device selection, Android native builds use NNAPI, and
+Snapdragon builds can use QNN's HTP/NPU backend. On machines with an independent
+CUDA, DirectML, AMD or QNN accelerator and at least 8 GB RAM, Pixelith can also
+start a CPU worker. Both workers pull tiles from one queue, so a slow worker
+never receives half the job by force. Use `--single-device` when measuring one
+backend or troubleshooting a driver.
 
 | Machine | What happens | 1080p frame, `fast` |
 |---|---|---|
@@ -358,6 +368,7 @@ python -m pixelith upscale scan.tif --scale 2.0
 | `--denoise`, `--sharpen` | Post-process strength, `0.0`–`1.0` |
 | `--quality` | JPEG/WebP encoder quality, default `95` |
 | `--tile` | Tile size override — lower it if you run out of memory |
+| `--single-device` | Disable automatic CPU/GPU/NPU cooperation |
 | `-y`, `--yes` | Skip the confirmation prompt on long jobs |
 
 Before it starts, `upscale` prints the source and target resolution, the number

@@ -143,12 +143,11 @@ class UpscaleSettings:
     sharpen: float = 0.0
     quality: int = 95
     providers: list[str] = field(default_factory=list)
-    # Share tiles with a second execution provider. Off by default: measured
-    # on Apple silicon it gained 12% at best and lost badly at the tile sizes
-    # actually in use, because dispatching to the neural engine still costs CPU
-    # and a second session doubles the working memory. Kept for machines with a
-    # genuinely separate GPU, where the two are independent.
-    hybrid: bool = False
+    # Use heterogeneous hardware automatically. Core ML, NNAPI and OpenVINO
+    # coordinate CPU/GPU/NPU inside one runtime. Discrete accelerators may get a
+    # separate CPU tile worker when there is enough memory. The faster worker
+    # pulls more work dynamically, so this is not an equal round-robin split.
+    hybrid: bool = True
 
     def resolved_model(self) -> ModelSpec:
         if self.model not in MODELS:

@@ -19,25 +19,26 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
+from queue import Empty, Queue
 from typing import Callable
 
 import numpy as np
 
 from .config import ModelSpec, UpscaleSettings
 from .compat import total_ram_bytes
+from .hardware import (
+    PROFILES,
+    auxiliary_providers,
+    configured,
+    profile as provider_profile,
+)
 from .models import ensure
 
 log = logging.getLogger("pixelith.engine")
 
 ProgressFn = Callable[[float], None]
 
-_PREFERRED = (
-    "CUDAExecutionProvider",
-    "CoreMLExecutionProvider",
-    "DmlExecutionProvider",
-    "ROCMExecutionProvider",
-    "CPUExecutionProvider",
-)
+_PREFERRED = tuple(item.name for item in PROFILES)
 
 
 class Cancelled(Exception):
@@ -85,15 +86,11 @@ def choose_providers(
 # Providers that tolerate a changing input shape cheaply. CoreML recompiles per
 # shape, so it must keep every tile the same size; the others do not, which lets
 # them skip padding entirely and process far fewer pixels.
-_STABLE_SHAPE_REQUIRED = {"CoreMLExecutionProvider"}
-
-_TILE_BY_PROVIDER = {
-    "CPUExecutionProvider": 1024,
-    "CoreMLExecutionProvider": 192,
-    "CUDAExecutionProvider": 1024,    # untested; large tiles suit GPU batching
-    "DmlExecutionProvider": 384,      # untested
-    "ROCMExecutionProvider": 1024,    # untested
+_STABLE_SHAPE_REQUIRED = {
+    item.name for item in PROFILES if item.stable_shape
 }
+
+_TILE_BY_PROVIDER = {item.name: item.tile for item in PROFILES}
 
 
 # Measured peak RSS for a 1080p -> 8K job on an M5 Pro, which is the worst
@@ -149,6 +146,29 @@ class EngineInfo:
     provider: str
     tile: int
     overlap: int
+    providers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class _Worker:
+    session: object
+    provider: str
+    input_name: str
+
+
+def _new_session(ort, path, opts, providers: list[str]):
+    """Create a configured session, retrying without optional EP knobs.
+
+    Provider options evolve across ONNX Runtime releases. Falling back to the
+    provider name preserves compatibility with older wheels instead of losing
+    acceleration altogether.
+    """
+    try:
+        return ort.InferenceSession(
+            str(path), opts, providers=[configured(name) for name in providers]
+        )
+    except Exception:
+        return ort.InferenceSession(str(path), opts, providers=providers)
 
 
 class Engine:
@@ -188,7 +208,7 @@ class Engine:
                 pass
 
         try:
-            self.session = ort.InferenceSession(str(path), opts, providers=providers)
+            self.session = _new_session(ort, path, opts, providers)
         except Exception as exc:  # noqa: BLE001 - fall back rather than die
             log.warning("provider set %s failed (%s); using CPU", providers, exc)
             self.session = ort.InferenceSession(
@@ -197,35 +217,21 @@ class Engine:
 
         self.provider = self.session.get_providers()[0]
 
-        # Optional second worker on a different provider. Tiles are shared
-        # between them, so a slower device simply does fewer. Worth having
-        # where the two are genuinely separate silicon; on a shared-memory
-        # machine the gain is small, because dispatching to the neural engine
-        # still costs CPU. Skipped when memory is tight, since each session
-        # carries its own working buffers.
+        # Optional workers on physically independent processors. Core ML,
+        # NNAPI and OpenVINO AUTO already coordinate CPU/GPU/NPU internally;
+        # creating competing sessions beside them usually makes them slower.
         self.extra: list = []
-        # A second worker only pays when it is competitive at the tile size in
-        # use. A small tile count means there is nothing to share anyway.
-        if self.settings.hybrid and total_ram_bytes() >= 12 * 1024**3:
-            for alt in providers:
-                if alt == self.provider or alt == "CPUExecutionProvider":
-                    continue
+        self._worker_providers: list[str] = []
+        if self.settings.hybrid and total_ram_bytes() >= 8 * 1024**3:
+            for alt in auxiliary_providers(self.provider, providers):
                 try:
-                    self.extra.append(
-                        ort.InferenceSession(str(path), opts, providers=[alt,
-                                             "CPUExecutionProvider"])
-                    )
-                except Exception:  # noqa: BLE001 - a second worker is a bonus
-                    pass
-                break
-            if not self.extra and self.provider != "CPUExecutionProvider":
-                try:
-                    self.extra.append(
-                        ort.InferenceSession(str(path), opts,
-                                             providers=["CPUExecutionProvider"])
-                    )
-                except Exception:  # noqa: BLE001
-                    pass
+                    session = _new_session(ort, path, opts, [alt])
+                    if session.get_providers()[0] != alt:
+                        continue
+                    self.extra.append(session)
+                    self._worker_providers.append(alt)
+                except Exception:  # noqa: BLE001 - extra hardware is optional
+                    log.debug("could not start heterogeneous worker %s", alt)
         self.input_name = self.session.get_inputs()[0].name
         # An explicit --tile always wins; otherwise adapt to provider and RAM.
         self.tile = int(self.settings.tile or pick_tile(self.provider, spec))
@@ -242,16 +248,29 @@ class Engine:
 
     def info(self) -> EngineInfo:
         return EngineInfo(
-            self.spec.key, self.scale, self.provider, self.tile, self.overlap
+            self.spec.key,
+            self.scale,
+            self.provider,
+            self.tile,
+            self.overlap,
+            tuple(self.active_providers),
         )
 
-    def _run_tile(self, tile: np.ndarray, session=None) -> np.ndarray:
+    @property
+    def active_providers(self) -> list[str]:
+        return [self.provider, *self._worker_providers]
+
+    def _run_tile(
+        self, tile: np.ndarray, worker: _Worker | None = None
+    ) -> np.ndarray:
         """tile: (h,w,3) float32 in [0,1] -> (h*s,w*s,3) float32."""
         batch = np.ascontiguousarray(
             tile.transpose(2, 0, 1)[None], dtype=np.float32
         )
         # ORT sessions are safe to call concurrently, so workers need no lock.
-        out = (session or self.session).run(None, {self.input_name: batch})[0]
+        session = worker.session if worker else self.session
+        input_name = worker.input_name if worker else self.input_name
+        out = session.run(None, {input_name: batch})[0]
         return out[0].transpose(1, 2, 0)
 
     @property
@@ -287,24 +306,28 @@ class Engine:
         wsum = np.zeros((band_h, w * s, 1), dtype=np.float32)
 
         sessions = [self.session, *self.extra]
+        workers = [
+            _Worker(session, provider, session.get_inputs()[0].name)
+            for session, provider in zip(sessions, self.active_providers)
+        ]
         pool = None
-        if len(sessions) > 1 and len(xs) > 1:
+        if len(workers) > 1 and len(xs) > 1:
             from concurrent.futures import ThreadPoolExecutor
 
-            pool = ThreadPoolExecutor(max_workers=len(sessions))
+            pool = ThreadPoolExecutor(max_workers=len(workers))
         write_lock = threading.Lock()
 
         total = len(ys) * len(xs)
         done = 0
         margin = V
 
-        def one_tile(y: int, x: int, session) -> None:
+        def one_tile(y: int, x: int, worker: _Worker) -> None:
             """Run a single tile into the current band. Concurrency-safe."""
             y1, x1 = min(y + T, h), min(x + T, w)
             patch = src[y:y1, x:x1]
             ph, pw = patch.shape[:2]
 
-            if self.pad_tiles:
+            if provider_profile(worker.provider).stable_shape:
                 # CoreML recompiles per input shape, so tiles are padded up to
                 # the full tile size and cropped afterwards.
                 if ph != T or pw != T:
@@ -313,7 +336,7 @@ class Engine:
                         ((0, T - ph), (0, T - pw), (0, 0)),
                         mode="reflect" if min(ph, pw) > 1 else "edge",
                     )
-                up = self._run_tile(patch, session)[: ph * s, : pw * s]
+                up = self._run_tile(patch, worker)[: ph * s, : pw * s]
             else:
                 # Elsewhere, run the tile at its real size and reflect only a
                 # small margin at the true image boundary. Padding every tile to
@@ -328,7 +351,7 @@ class Engine:
                     )
                 else:
                     pt = pl = pb = pr = 0
-                up = self._run_tile(patch, session)
+                up = self._run_tile(patch, worker)
                 if pt or pl or pb or pr:
                     up = up[
                         pt * s : up.shape[0] - pb * s if pb else None,
@@ -366,15 +389,28 @@ class Engine:
                     for x in xs:
                         if should_cancel and should_cancel():
                             raise Cancelled()
-                        one_tile(y, x, self.session)
+                        one_tile(y, x, workers[0])
                 else:
-                    # Tiles in a row are independent, so they can be shared
-                    # across workers. Rows still complete in order, which is
-                    # what keeps the banding valid.
-                    jobs = [
-                        pool.submit(one_tile, y, x, sessions[i % len(sessions)])
-                        for i, x in enumerate(xs)
-                    ]
+                    # Each worker pulls its next tile only after finishing the
+                    # previous one. A fast GPU/NPU therefore processes more of
+                    # the row than a slower CPU instead of waiting at an equal
+                    # round-robin split.
+                    pending: Queue[int] = Queue()
+                    for x in xs:
+                        pending.put(x)
+
+                    def drain(worker: _Worker) -> None:
+                        while True:
+                            try:
+                                x = pending.get_nowait()
+                            except Empty:
+                                return
+                            try:
+                                one_tile(y, x, worker)
+                            finally:
+                                pending.task_done()
+
+                    jobs = [pool.submit(drain, worker) for worker in workers]
                     for job in jobs:
                         job.result()
 

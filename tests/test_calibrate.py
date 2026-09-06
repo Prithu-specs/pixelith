@@ -28,6 +28,14 @@ def test_nothing_cached_to_begin_with():
     assert calibrate.cached("fast") is None
 
 
+def test_old_single_tile_measurement_is_not_reused():
+    key = f"{calibrate._machine_key()}:fast"
+    calibrate.CALIBRATION_FILE.write_text(
+        json.dumps({key: {"provider": "CPUExecutionProvider"}})
+    )
+    assert calibrate.cached("fast") is None
+
+
 def test_a_missing_cache_file_is_not_an_error():
     calibrate.forget()
     assert calibrate.cached("fast") is None
@@ -62,6 +70,8 @@ def test_measuring_picks_a_provider_and_records_its_timings():
     stored = json.loads(calibrate.CALIBRATION_FILE.read_text())
     entry = next(iter(stored.values()))
     assert entry["provider"] == winner
+    assert entry["format"] == calibrate._FORMAT
+    assert entry["tile"] >= 64
     assert entry["seconds"], "timings should be recorded, not just the winner"
     # The winner must actually be the fastest thing measured.
     assert entry["provider"] == min(entry["seconds"], key=entry["seconds"].get)

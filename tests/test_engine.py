@@ -128,10 +128,69 @@ def test_both_tiling_paths_agree_away_from_the_border():
     assert interior.max() <= 8, f"interior differs by {interior.max()}"
 
 
-def test_hybrid_is_off_by_default():
-    """Measured on shared-memory silicon it lost badly: a second CoreML session
-    at the tile size actually in use ran 3.3x slower and used 4x the memory."""
-    assert UpscaleSettings().hybrid is False
+def test_heterogeneous_execution_is_automatic_by_default():
+    assert UpscaleSettings().hybrid is True
+
+
+def test_managed_heterogeneous_provider_does_not_get_competing_cpu_session():
+    from pixelith.hardware import auxiliary_providers
+
+    ranked = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
+    assert auxiliary_providers(ranked[0], ranked) == []
+
+
+def test_discrete_accelerator_can_share_tiles_with_cpu():
+    from pixelith.hardware import auxiliary_providers
+
+    ranked = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    assert auxiliary_providers(ranked[0], ranked) == ["CPUExecutionProvider"]
+
+
+def test_npu_providers_are_known():
+    from pixelith.hardware import profile
+
+    assert profile("QNNExecutionProvider").kind == "npu"
+    assert profile("OpenVINOExecutionProvider").managed_heterogeneous
+    assert profile("NnapiExecutionProvider").managed_heterogeneous
+
+
+def test_faster_worker_pulls_more_tiles():
+    """Heterogeneous scheduling must be throughput-weighted, not round-robin."""
+    import time
+    from types import SimpleNamespace
+
+    from pixelith.engine import Engine
+
+    class FakeSession:
+        def __init__(self, delay):
+            self.delay = delay
+            self.calls = 0
+
+        def get_inputs(self):
+            return [SimpleNamespace(name="input")]
+
+        def run(self, _outputs, feed):
+            self.calls += 1
+            time.sleep(self.delay)
+            batch = feed["input"]
+            return [np.repeat(np.repeat(batch, 4, axis=2), 4, axis=3)]
+
+    fast, slow = FakeSession(0.0), FakeSession(0.02)
+    eng = Engine.__new__(Engine)
+    eng.spec = MODELS["fast"]
+    eng.settings = UpscaleSettings()
+    eng.session = fast
+    eng.extra = [slow]
+    eng.provider = "CUDAExecutionProvider"
+    eng._worker_providers = ["CPUExecutionProvider"]
+    eng.input_name = "input"
+    eng.tile = 64
+    eng.overlap = 8
+    eng.pad_tiles = False
+    eng._lock = __import__("threading").Lock()
+
+    eng.upscale(np.zeros((48, 240, 3), dtype=np.uint8))
+    assert fast.calls > slow.calls
 
 
 @needs_model
