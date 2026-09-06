@@ -12,7 +12,8 @@ from pathlib import Path
 
 from . import __version__, license_info
 from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, OUTPUT_DIR, PRESETS,
-                     WORK_DIR, UpscaleSettings, resolve_preset)
+                     VIDEO_FPS_CHOICES, WORK_DIR, UpscaleSettings,
+                     resolve_preset)
 from .engine import Cancelled, Engine, available_providers, choose_providers
 from . import licensing, watermark
 from .models import ensure, is_available, status as model_status
@@ -307,6 +308,7 @@ def cmd_upscale(args: argparse.Namespace) -> int:
         denoise=args.denoise, sharpen=args.sharpen, quality=args.quality,
         tile=args.tile, hybrid=not args.single_device,
         aspect_ratio=args.aspect_ratio, aspect_mode=args.aspect_mode,
+        target_fps=args.fps,
     )
     spec = settings.resolved_model()
     is_video = src.suffix.lower() not in IMAGE_SUFFIXES
@@ -317,7 +319,11 @@ def cmd_upscale(args: argparse.Namespace) -> int:
                   file=sys.stderr)
             return 2
         info = probe(src)
-        w, h, frames = info.width, info.height, max(1, info.frames)
+        w, h = info.width, info.height
+        frames = (
+            max(1, round(info.duration * args.fps))
+            if args.fps and info.duration > 0 else max(1, info.frames)
+        )
     else:
         from PIL import Image, ImageOps
         with Image.open(src) as im:
@@ -345,7 +351,9 @@ def cmd_upscale(args: argparse.Namespace) -> int:
     print(f"{src.name}: {w}x{h} -> {p.out_width}x{p.out_height} "
           f"({p.passes} network pass{'es' if p.passes != 1 else ''}, model '{spec.key}')")
     if is_video:
-        print(f"  {frames} frames at {info.fps} fps")
+        output_fps = args.fps or info.fps
+        print(f"  {frames} frames at {output_fps} fps"
+              f" (source {info.fps} fps)")
     print(f"  estimated {human_time(est)}")
     print(f"  writing to {dest}")
 
@@ -454,6 +462,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="fit",
         choices=ASPECT_MODES,
         help="fit adds bars, fill crops, stretch distorts",
+    )
+    u.add_argument(
+        "--fps",
+        type=int,
+        choices=VIDEO_FPS_CHOICES,
+        help="video output frame rate; default preserves the source",
     )
     u.add_argument(
         "--single-device",

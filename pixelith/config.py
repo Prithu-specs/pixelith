@@ -129,6 +129,7 @@ ASPECT_RATIOS: dict[str, tuple[int, int] | None] = {
     "9:16": (9, 16),
 }
 ASPECT_MODES = ("fit", "fill", "stretch")
+VIDEO_FPS_CHOICES = (24, 30, 60, 120)
 
 # A finished file must satisfy both limits. Three times the source is the
 # normal ceiling; one decimal GB is the non-negotiable hard ceiling.
@@ -160,6 +161,7 @@ class UpscaleSettings:
     quality: int = 95
     aspect_ratio: str = "source"
     aspect_mode: str = "fit"
+    target_fps: int | None = None
     max_output_multiplier: float = MAX_OUTPUT_MULTIPLIER
     providers: list[str] = field(default_factory=list)
     # Use heterogeneous hardware automatically. Core ML, NNAPI and OpenVINO

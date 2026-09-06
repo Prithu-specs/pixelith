@@ -237,7 +237,11 @@ class JobManager:
             w, h = info.width, info.height
             job.source = {"width": w, "height": h, "frames": info.frames,
                           "fps": info.fps, "duration": info.duration}
-            frames = max(1, info.frames)
+            frames = (
+                max(1, round(info.duration * job.settings.target_fps))
+                if job.settings.target_fps and info.duration > 0
+                else max(1, info.frames)
+            )
             ext = (out_format or "mp4").lower()
             if ext not in ("mp4", "mov"):
                 ext = "mp4"
@@ -251,7 +255,11 @@ class JobManager:
             job.settings.aspect_ratio,
             job.settings.aspect_mode,
         )
-        job.target = {"width": p.out_width, "height": p.out_height}
+        job.target = {
+            "width": p.out_width,
+            "height": p.out_height,
+            "fps": job.settings.target_fps if job.kind == "video" else None,
+        }
         job.eta_seconds = estimate_seconds(w, h, p, spec.key, frames=frames)
 
         stem = Path(job.filename).stem or "upscaled"

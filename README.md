@@ -82,6 +82,8 @@ FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
 - **Images and video**, up to 8K output, from a single tool.
 - **Aspect-ratio conversion.** Keep the source shape or produce exact 16:9,
   4:3, 1:1 and 9:16 canvases using Fit, Fill or Stretch framing.
+- **Selectable video frame rate.** Preserve the source rate or output 24, 30,
+  60 or 120 FPS while keeping the original duration and audio timing.
 - **Bounded output size.** Pixelith targets no more than 3x the source file and
   enforces an absolute 1 GB ceiling. Video bitrate is calculated from duration;
   JPEG and WEBP quality is reduced only when the budget requires it.
@@ -378,6 +380,7 @@ python -m pixelith upscale scan.tif --scale 2.0
 | `--tile` | Tile size override — lower it if you run out of memory |
 | `--aspect-ratio` | `source`, `16:9`, `4:3`, `1:1`, or `9:16` |
 | `--aspect-mode` | `fit` keeps everything with bars, `fill` crops, `stretch` distorts |
+| `--fps` | Video output rate: `24`, `30`, `60`, or `120`; omitted keeps source FPS |
 | `--single-device` | Disable automatic CPU/GPU/NPU cooperation |
 | `-y`, `--yes` | Skip the confirmation prompt on long jobs |
 

@@ -212,6 +212,27 @@
         </div>
         <p class="hint">Fit may add black bars. Finished files are limited to 3&times; the source size and never more than 1 GB.</p>
 
+        <div class="field" id="video-fps-wrap">
+          <div class="slider-head">
+            <label class="field__label field__label--sub" for="video-fps">Video frame rate</label>
+            <output class="slider-value" id="video-fps-out" for="video-fps">Source</output>
+          </div>
+          <input type="range" id="video-fps" name="video-fps" min="0" max="4"
+                 step="1" value="0" list="video-fps-ticks"
+                 aria-describedby="video-fps-hint">
+          <datalist id="video-fps-ticks">
+            <option value="0" label="Source"></option>
+            <option value="1" label="24"></option>
+            <option value="2" label="30"></option>
+            <option value="3" label="60"></option>
+            <option value="4" label="120"></option>
+          </datalist>
+          <div class="slider-scale slider-scale--five" aria-hidden="true">
+            <span>Source</span><span>24</span><span>30</span><span>60</span><span>120 FPS</span>
+          </div>
+          <p id="video-fps-hint" class="hint">Higher rates duplicate frames to preserve duration; they do not invent new motion and can increase processing time.</p>
+        </div>
+
         <div class="field grid-2">
           <div>
             <div class="slider-head">

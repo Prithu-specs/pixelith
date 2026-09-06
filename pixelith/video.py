@@ -26,7 +26,7 @@ import numpy as np
 from . import licensing
 from .compression import (AUDIO_BITRATE, OutputTooLarge, expansion_ratio,
                           output_budget, video_bitrate)
-from .config import UpscaleSettings
+from .config import VIDEO_FPS_CHOICES, UpscaleSettings
 from .engine import Cancelled, Engine
 from .pipeline import Plan, fit_to_canvas, plan
 
@@ -160,10 +160,17 @@ def _encoder_works(
     return check.returncode == 0
 
 
-def _open_decoder(src: Path, info: VideoInfo) -> subprocess.Popen:
+def _open_decoder(
+    src: Path, info: VideoInfo, target_fps: float | None = None
+) -> subprocess.Popen:
+    args = ["ffmpeg", "-v", "error", "-i", str(src)]
+    if target_fps is not None and abs(target_fps - info.fps) > 0.001:
+        # FFmpeg's fps filter preserves duration: it drops frames when reducing
+        # FPS and duplicates the nearest frame when increasing it.
+        args += ["-vf", f"fps={target_fps}"]
+    args += ["-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     return subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-i", str(src),
-         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        args,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         bufsize=info.width * info.height * 3 * 2,
     )
@@ -210,6 +217,18 @@ def upscale_video(
     info = probe(src)
     if info.frames <= 0:
         raise VideoError(f"could not determine the frame count of {src.name}.")
+    if settings.target_fps is not None and settings.target_fps not in VIDEO_FPS_CHOICES:
+        raise VideoError(
+            f"unsupported output FPS {settings.target_fps}; "
+            f"choose one of {VIDEO_FPS_CHOICES}"
+        )
+
+    output_fps = float(settings.target_fps or info.fps)
+    output_frames = (
+        max(1, round(info.duration * output_fps))
+        if settings.target_fps and info.duration > 0
+        else max(1, info.frames)
+    )
 
     p: Plan = plan(
         info.width,
@@ -238,7 +257,8 @@ def upscale_video(
     signature = {
         "src": str(src), "size": src.stat().st_size, "mtime": int(src.stat().st_mtime),
         "out": [out_w, out_h], "model": spec.key, "passes": p.passes,
-        "fps": info.fps, "tile": eng.tile, "overlap": eng.overlap,
+        "source_fps": info.fps, "fps": output_fps,
+        "tile": eng.tile, "overlap": eng.overlap,
         "denoise": round(float(settings.denoise), 4),
         "sharpen": round(float(settings.sharpen), 4),
         "aspect_ratio": settings.aspect_ratio,
@@ -260,7 +280,7 @@ def upscale_video(
     while done_segments and not (seg_dir / f"seg_{done_segments - 1:05d}.mp4").exists():
         done_segments -= 1
 
-    total_segments = max(1, -(-info.frames // SEGMENT_FRAMES))
+    total_segments = max(1, -(-output_frames // SEGMENT_FRAMES))
     start_frame = done_segments * SEGMENT_FRAMES
     frame_bytes = info.width * info.height * 3
 
@@ -269,10 +289,10 @@ def upscale_video(
             progress(max(0.0, min(1.0, frac)), msg, extra or {})
 
     if done_segments:
-        emit(start_frame / info.frames,
+        emit(start_frame / output_frames,
              f"resuming after {done_segments} finished segment(s)", {})
 
-    dec = _open_decoder(src, info)
+    dec = _open_decoder(src, info, output_fps)
     enc: subprocess.Popen | None = None
     seg_index = done_segments
     frames_in_segment = 0
@@ -299,7 +319,7 @@ def upscale_video(
                     seg_dir / f"seg_{seg_index:05d}.part.mp4",
                     out_w,
                     out_h,
-                    info.fps,
+                    output_fps,
                     target_bitrate,
                 )
                 frames_in_segment = 0
@@ -340,13 +360,13 @@ def upscale_video(
             recent = per_frame_times[-20:]
             avg = sum(recent) / len(recent)
             emit(
-                absolute / info.frames,
-                f"frame {absolute} of {info.frames}",
+                absolute / output_frames,
+                f"frame {absolute} of {output_frames}",
                 {
                     "frames_done": absolute,
-                    "frames_total": info.frames,
+                    "frames_total": output_frames,
                     "seconds_per_frame": round(avg, 3),
-                    "eta_seconds": round(avg * (info.frames - absolute), 1),
+                    "eta_seconds": round(avg * (output_frames - absolute), 1),
                 },
             )
 
@@ -404,7 +424,8 @@ def upscale_video(
     return {
         **p.as_dict(),
         "output_width": out_w, "output_height": out_h,
-        "frames": info.frames, "fps": info.fps,
+        "frames": output_frames, "fps": output_fps,
+        "source_frames": info.frames, "source_fps": info.fps,
         "frames_processed": processed,
         "resumed_from": start_frame,
         "segments": seg_index,

@@ -30,6 +30,7 @@ const API = '/api';
 const STORE_KEY = 'pixelith.settings.v1';
 const POLL_MS = 1500;
 const ASSUMED_FPS = 30;               // API contract: assume 30 when fps is unknown
+const VIDEO_FPS_OPTIONS = [null, 24, 30, 60, 120];
 const TERMINAL = new Set(['done', 'error', 'cancelled']);
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif', 'bmp', 'tif', 'tiff'];
@@ -89,6 +90,9 @@ const el = {
   scaleOut:     $('#scale-out'),
   aspectRatio:  $('#aspect-ratio'),
   aspectMode:   $('#aspect-mode'),
+  videoFpsWrap: $('#video-fps-wrap'),
+  videoFps:     $('#video-fps'),
+  videoFpsOut:  $('#video-fps-out'),
   denoise:      $('#denoise'),
   denoiseOut:   $('#denoise-out'),
   sharpen:      $('#sharpen'),
@@ -348,6 +352,7 @@ function readSettings() {
     scale: parseFloat(el.scale.value),
     aspectRatio: el.aspectRatio.value,
     aspectMode: el.aspectMode.value,
+    videoFps: selectedVideoFps(),
     denoise: parseFloat(el.denoise.value),
     sharpen: parseFloat(el.sharpen.value),
     imageFormat: el.imageFormat.value,
@@ -368,6 +373,9 @@ function applySettings(s) {
   if (Number.isFinite(s.scale)) el.scale.value = clamp(s.scale, 1.5, 8);
   if (s.aspectRatio) el.aspectRatio.value = s.aspectRatio;
   if (s.aspectMode) el.aspectMode.value = s.aspectMode;
+  if (VIDEO_FPS_OPTIONS.includes(s.videoFps)) {
+    el.videoFps.value = String(VIDEO_FPS_OPTIONS.indexOf(s.videoFps));
+  }
   if (Number.isFinite(s.denoise)) el.denoise.value = clamp(s.denoise, 0, 1);
   if (Number.isFinite(s.sharpen)) el.sharpen.value = clamp(s.sharpen, 0, 1);
   if (s.imageFormat) el.imageFormat.value = s.imageFormat;
@@ -381,6 +389,12 @@ function syncSliderOutputs() {
   setText(el.scaleOut, `${parseFloat(el.scale.value).toFixed(1)}×`);
   setText(el.denoiseOut, parseFloat(el.denoise.value).toFixed(2));
   setText(el.sharpenOut, parseFloat(el.sharpen.value).toFixed(2));
+  const fps = selectedVideoFps();
+  setText(el.videoFpsOut, fps ? `${fps} FPS` : 'Source');
+}
+
+function selectedVideoFps() {
+  return VIDEO_FPS_OPTIONS[Number(el.videoFps.value)] ?? null;
 }
 
 function syncTargetMode() {
@@ -831,10 +845,12 @@ function syncFormatVisibility() {
   if (!staged.length) {
     el.imageFmtWrap.hidden = false;
     el.videoFmtWrap.hidden = false;
+    el.videoFpsWrap.hidden = false;
     return;
   }
   el.imageFmtWrap.hidden = !staged.some((s) => s.kind === 'image');
   el.videoFmtWrap.hidden = !staged.some((s) => s.kind === 'video');
+  el.videoFpsWrap.hidden = !staged.some((s) => s.kind === 'video');
 }
 
 /* -------------------------------------------------------------------------- *
@@ -881,6 +897,7 @@ async function runEstimates() {
       height: item.source.height,
       frames: item.source.frames,
       fps: item.source.fps,
+      target_fps: item.kind === 'video' ? selectedVideoFps() : null,
       model,
       ...target,
       ...geometryPayload(),
@@ -970,6 +987,11 @@ function renderEstimates(results) {
       if (d.target_video_bitrate) {
         bits.push(`adaptive video ~${(d.target_video_bitrate / 1e6).toFixed(2)} Mbps`);
       }
+      if (d.output_fps) {
+        const source = d.source_fps && d.source_fps !== d.output_fps
+          ? ` (source ${Number(d.source_fps).toFixed(2)})` : '';
+        bits.push(`${Number(d.output_fps).toFixed(0)} FPS${source}`);
+      }
       dims.textContent = bits.join('  ·  ');
       row.appendChild(dims);
 
@@ -1046,6 +1068,9 @@ async function submitAll(event) {
     fd.append('sharpen', el.sharpen.value);
     fd.append('aspect_ratio', el.aspectRatio.value);
     fd.append('aspect_mode', el.aspectMode.value);
+    if (item.kind === 'video' && selectedVideoFps()) {
+      fd.append('target_fps', String(selectedVideoFps()));
+    }
     fd.append('format', item.kind === 'video' ? el.videoFormat.value : el.imageFormat.value);
 
     try {
@@ -1845,7 +1870,7 @@ function wireSettings() {
     radio.addEventListener('change', () => { syncTargetMode(); saveSettings(); scheduleEstimate(); });
   });
 
-  [el.scale, el.denoise, el.sharpen].forEach((input) => {
+  [el.scale, el.denoise, el.sharpen, el.videoFps].forEach((input) => {
     input.addEventListener('input', syncSliderOutputs);
     input.addEventListener('change', () => { saveSettings(); scheduleEstimate(); });
   });

@@ -5,7 +5,7 @@ static (no build step). All endpoints below are under `/api`.
 
 ## GET /api/health
 ```json
-{"status":"ok","version":"0.3.0b4","providers":["CPUExecutionProvider"],
+{"status":"ok","version":"0.40b4","providers":["CPUExecutionProvider"],
  "ffmpeg":true,"active":{"fast":"CoreMLExecutionProvider","quality":"CoreMLExecutionProvider"},
  "max_upload_bytes":8589934592}
 ```
@@ -30,6 +30,7 @@ alias for `1080p`.
 ## POST /api/estimate
 Request: `{"kind":"video","width":1920,"height":1080,"frames":1800,"fps":30,
            "source_bytes":250000000,"model":"fast","preset":"720p",
+           "target_fps":60,
            "aspect_ratio":"16:9","aspect_mode":"fit"}`
 
 Pass **either** `preset` **or** `scale` (a float), never both; `preset` wins if
@@ -38,6 +39,8 @@ both appear. With neither, the model's native factor is used.
 `aspect_ratio` is `source`, `16:9`, `4:3`, `1:1`, or `9:16`.
 `aspect_mode` is `fit` (bars, no lost content), `fill` (centre crop), or
 `stretch`. Supplying `source_bytes` adds the output-size budget to the response.
+`target_fps` may be `24`, `30`, `60`, or `120`; omit it to preserve the source
+frame rate and duration.
 
 Note on video: browsers cannot read a file's frame rate, so clients should send
 `fps: 30` as an assumption. The server re-probes the real rate on submission, so
@@ -56,7 +59,7 @@ Response:
 ## POST /api/jobs   (multipart/form-data)
 Fields: `file` (required), `model` (`fast`|`quality`), `preset` (`180p`…`8k`, optional),
 `scale` (float, optional — used when `preset` is absent), `denoise` (0–1),
-`sharpen` (0–1), `aspect_ratio`, `aspect_mode`, and `format`
+`sharpen` (0–1), `aspect_ratio`, `aspect_mode`, `target_fps`, and `format`
 (`png`|`jpg`|`webp` for images; `mp4`|`mov` for video).
 
 Every finished output is limited to three times its source-file size and to an

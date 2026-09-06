@@ -21,8 +21,8 @@ from pydantic import BaseModel, Field
 from . import __version__, license_info, pricing
 from . import DEFAULT_CURRENCY as _DEFAULT_CURRENCY
 from .compression import OutputTooLarge, output_budget, video_bitrate
-from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, PRESETS, WORK_DIR,
-                     UpscaleSettings)
+from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, PRESETS,
+                     VIDEO_FPS_CHOICES, WORK_DIR, UpscaleSettings)
 from .engine import available_providers, choose_providers
 from .hardware import describe as describe_hardware
 from . import licensing, preview as preview_mod
@@ -51,6 +51,7 @@ class EstimateRequest(BaseModel):
     height: int = Field(gt=0)
     frames: int | None = None
     fps: float | None = None
+    target_fps: int | None = None
     model: str = "fast"
     preset: str | None = None
     scale: float | None = None
@@ -99,6 +100,8 @@ def estimate(req: EstimateRequest) -> dict:
     if req.model not in MODELS:
         raise HTTPException(400, f"unknown model {req.model!r}")
     spec = MODELS[req.model]
+    if req.target_fps is not None and req.target_fps not in VIDEO_FPS_CHOICES:
+        raise HTTPException(400, f"unsupported output FPS {req.target_fps}")
     try:
         p = plan(
             req.width,
@@ -113,6 +116,13 @@ def estimate(req: EstimateRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
     frames = max(1, req.frames or 1) if req.kind == "video" else 1
+    if (
+        req.kind == "video"
+        and req.target_fps
+        and req.fps
+        and req.fps > 0
+    ):
+        frames = max(1, round(frames * req.target_fps / req.fps))
     seconds = estimate_seconds(req.width, req.height, p, spec.key, frames=frames)
 
     warning = None
@@ -158,6 +168,11 @@ def estimate(req: EstimateRequest) -> dict:
             if budget_bytes and req.source_bytes else None
         ),
         "target_video_bitrate": target_video_bitrate,
+        "source_fps": req.fps if req.kind == "video" else None,
+        "output_fps": (
+            req.target_fps or req.fps if req.kind == "video" else None
+        ),
+        "output_frames": frames if req.kind == "video" else None,
         "compression_policy": (
             "adaptive_bitrate" if req.kind == "video" else "adaptive_quality"
         ),
@@ -175,6 +190,7 @@ async def create_job(
     quality: int = Form(95),
     aspect_ratio: str = Form("source"),
     aspect_mode: str = Form("fit"),
+    target_fps: int | None = Form(None),
     format: str | None = Form(None),
 ) -> JSONResponse:
     name = Path(file.filename or "upload").name
@@ -190,6 +206,8 @@ async def create_job(
         raise HTTPException(400, f"unknown aspect ratio {aspect_ratio!r}")
     if aspect_mode not in ASPECT_MODES:
         raise HTTPException(400, f"unknown aspect mode {aspect_mode!r}")
+    if target_fps is not None and target_fps not in VIDEO_FPS_CHOICES:
+        raise HTTPException(400, f"unsupported output FPS {target_fps}")
 
     dest = UPLOAD_DIR / f"{int(time.time() * 1000)}_{name}"
     size = 0
@@ -244,6 +262,7 @@ async def create_job(
         quality=max(1, min(100, quality)),
         aspect_ratio=aspect_ratio,
         aspect_mode=aspect_mode,
+        target_fps=target_fps if kind == "video" else None,
     )
     try:
         job = MANAGER.submit(dest, name, settings, out_format=format)
