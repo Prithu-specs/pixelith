@@ -165,13 +165,15 @@
               <label class="field__label field__label--sub" for="preset">Resolution</label>
               <output class="reso__value" id="preset-out" for="preset">4K</output>
             </div>
+            <div id="resolution-options" class="resolution-options"
+                 role="radiogroup" aria-label="Output resolution presets"></div>
             <input type="range" id="preset" name="preset" min="0" max="8" step="1"
                    value="6" list="preset-ticks"
                    aria-describedby="preset-detail">
             <datalist id="preset-ticks"></datalist>
             <div class="reso__scale" id="preset-scale" aria-hidden="true"></div>
             <p class="reso__detail" id="preset-detail"></p>
-            <p class="hint">The longest edge is fitted to this target; aspect ratio is kept.</p>
+            <p class="hint">Choose the output resolution, then select whether to keep or change the aspect ratio.</p>
           </div>
 
           <div id="scale-pane" class="pane" hidden>
@@ -183,6 +185,32 @@
             <div class="slider-scale" aria-hidden="true"><span>1.5&times;</span><span>8&times;</span></div>
           </div>
         </fieldset>
+
+        <div class="field grid-2">
+          <div>
+            <label class="field__label field__label--sub" for="aspect-ratio">Aspect ratio</label>
+            <div class="select-wrap">
+              <select id="aspect-ratio">
+                <option value="source">Keep source</option>
+                <option value="16:9">16:9 &middot; widescreen</option>
+                <option value="4:3">4:3 &middot; standard</option>
+                <option value="1:1">1:1 &middot; square</option>
+                <option value="9:16">9:16 &middot; portrait</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="field__label field__label--sub" for="aspect-mode">Framing</label>
+            <div class="select-wrap">
+              <select id="aspect-mode">
+                <option value="fit">Fit &middot; keep everything</option>
+                <option value="fill">Fill &middot; crop edges</option>
+                <option value="stretch">Stretch &middot; no bars</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <p class="hint">Fit may add black bars. Finished files are limited to 3&times; the source size and never more than 1 GB.</p>
 
         <div class="field grid-2">
           <div>
@@ -236,6 +264,7 @@
         </h2>
         <div id="estimate-body" class="estimate" aria-live="polite" aria-busy="false"></div>
         <div id="estimate-warnings" class="warnings"></div>
+        <p class="hint estimate__note">Time is estimated before processing. The exact output size and compression ratio are reported when the job finishes.</p>
       </div>
 
       <div class="actions">

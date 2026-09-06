@@ -17,15 +17,18 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass, asdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
 from . import licensing
+from .compression import (AUDIO_BITRATE, OutputTooLarge, expansion_ratio,
+                          output_budget, video_bitrate)
 from .config import UpscaleSettings
 from .engine import Cancelled, Engine
-from .pipeline import Plan, plan
+from .pipeline import Plan, fit_to_canvas, plan
 
 SEGMENT_FRAMES = 240  # ~8 s at 30 fps
 
@@ -102,25 +105,59 @@ def probe(path: Path) -> VideoInfo:
     )
 
 
-def _encoder_args(width: int, height: int, prefer_hw: bool = True) -> list[str]:
-    """Pick a codec. Above 4K we need HEVC; H.264 levels do not cover 8K."""
-    big = (width * height) > (3840 * 2160)
-    encoders = subprocess.run(
+@lru_cache(maxsize=1)
+def _available_encoders() -> str:
+    return subprocess.run(
         ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True
     ).stdout
+
+
+def _encoder_args(
+    width: int,
+    height: int,
+    bitrate: int,
+    prefer_hw: bool = True,
+) -> list[str]:
+    """Pick a codec. Above 4K we need HEVC; H.264 levels do not cover 8K."""
+    big = (width * height) > (3840 * 2160)
+    encoders = _available_encoders()
+    rate = [
+        "-b:v", str(bitrate),
+        "-maxrate", str(int(bitrate * 1.25)),
+        "-bufsize", str(bitrate * 2),
+    ]
 
     def has(name: str) -> bool:
         return name in encoders
 
     if big:
         if prefer_hw and has("hevc_videotoolbox"):
-            return ["-c:v", "hevc_videotoolbox", "-b:v", "80M", "-tag:v", "hvc1"]
+            return ["-c:v", "hevc_videotoolbox", "-allow_sw", "1",
+                    *rate, "-tag:v", "hvc1"]
         if has("libx265"):
-            return ["-c:v", "libx265", "-preset", "medium", "-crf", "20",
+            return ["-c:v", "libx265", "-preset", "medium", *rate,
                     "-tag:v", "hvc1"]
     if prefer_hw and has("h264_videotoolbox"):
-        return ["-c:v", "h264_videotoolbox", "-b:v", "40M"]
-    return ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
+        return ["-c:v", "h264_videotoolbox", "-allow_sw", "1", *rate]
+    return ["-c:v", "libx264", "-preset", "medium", *rate]
+
+
+@lru_cache(maxsize=32)
+def _encoder_works(
+    encoder_args: tuple[str, ...], width: int, height: int, fps: float
+) -> bool:
+    """Return whether an advertised hardware encoder can start successfully."""
+    check = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-f", "lavfi", "-i",
+            f"color=c=black:s={width}x{height}:r={fps}",
+            "-frames:v", "1", "-an", "-pix_fmt", "yuv420p",
+            *encoder_args, "-f", "null", "-",
+        ],
+        capture_output=True,
+        timeout=30,
+    )
+    return check.returncode == 0
 
 
 def _open_decoder(src: Path, info: VideoInfo) -> subprocess.Popen:
@@ -132,11 +169,22 @@ def _open_decoder(src: Path, info: VideoInfo) -> subprocess.Popen:
     )
 
 
-def _open_encoder(dest: Path, w: int, h: int, fps: float) -> subprocess.Popen:
+def _open_encoder(
+    dest: Path, w: int, h: int, fps: float, bitrate: int
+) -> subprocess.Popen:
+    encoder_args = _encoder_args(w, h, bitrate)
+    if any("videotoolbox" in arg for arg in encoder_args):
+        try:
+            usable = _encoder_works(tuple(encoder_args), w, h, fps)
+        except (OSError, subprocess.TimeoutExpired):
+            usable = False
+        if not usable:
+            encoder_args = _encoder_args(w, h, bitrate, prefer_hw=False)
     args = ["ffmpeg", "-v", "error", "-y",
             "-f", "rawvideo", "-pix_fmt", "rgb24",
             "-s", f"{w}x{h}", "-r", f"{fps}", "-i", "-",
-            "-an", "-pix_fmt", "yuv420p", *_encoder_args(w, h), str(dest)]
+            "-an", "-pix_fmt", "yuv420p",
+            *encoder_args, str(dest)]
     return subprocess.Popen(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
@@ -163,8 +211,22 @@ def upscale_video(
     if info.frames <= 0:
         raise VideoError(f"could not determine the frame count of {src.name}.")
 
-    p: Plan = plan(info.width, info.height, settings.preset, settings.scale, spec.scale)
+    p: Plan = plan(
+        info.width,
+        info.height,
+        settings.preset,
+        settings.scale,
+        spec.scale,
+        settings.aspect_ratio,
+        settings.aspect_mode,
+    )
     out_w, out_h = p.out_width - (p.out_width % 2), p.out_height - (p.out_height % 2)
+    source_bytes = src.stat().st_size
+    budget_bytes = output_budget(source_bytes, settings.max_output_multiplier)
+    try:
+        target_bitrate = video_bitrate(info.duration, budget_bytes, info.has_audio)
+    except (ValueError, OutputTooLarge) as exc:
+        raise VideoError(str(exc)) from exc
 
     work_dir.mkdir(parents=True, exist_ok=True)
     seg_dir = work_dir / "segments"
@@ -179,6 +241,10 @@ def upscale_video(
         "fps": info.fps, "tile": eng.tile, "overlap": eng.overlap,
         "denoise": round(float(settings.denoise), 4),
         "sharpen": round(float(settings.sharpen), 4),
+        "aspect_ratio": settings.aspect_ratio,
+        "aspect_mode": settings.aspect_mode,
+        "target_bitrate": target_bitrate,
+        "size_budget": budget_bytes,
     }
     done_segments = 0
     if resume and state_file.exists():
@@ -230,7 +296,11 @@ def upscale_video(
 
             if enc is None:
                 enc = _open_encoder(
-                    seg_dir / f"seg_{seg_index:05d}.part.mp4", out_w, out_h, info.fps
+                    seg_dir / f"seg_{seg_index:05d}.part.mp4",
+                    out_w,
+                    out_h,
+                    info.fps,
+                    target_bitrate,
                 )
                 frames_in_segment = 0
 
@@ -244,9 +314,11 @@ def upscale_video(
 
             if (cur.shape[1], cur.shape[0]) != (out_w, out_h):
                 from PIL import Image
-                cur = np.asarray(
-                    Image.fromarray(cur).resize((out_w, out_h), Image.LANCZOS)
-                )
+                cur = np.asarray(fit_to_canvas(
+                    Image.fromarray(cur),
+                    (out_w, out_h),
+                    settings.aspect_mode,
+                ))
             if settings.denoise > 0 or settings.sharpen > 0:
                 from PIL import Image
                 from .pipeline import _postprocess
@@ -312,6 +384,14 @@ def upscale_video(
     emit(0.97, "joining segments and adding audio", {})
     _concat(seg_dir, seg_index, src, dest, info.has_audio)
 
+    output_bytes = dest.stat().st_size if dest.exists() else 0
+    if output_bytes > budget_bytes:
+        dest.unlink(missing_ok=True)
+        raise VideoError(
+            f"compressed output exceeded its {budget_bytes / 1_000_000:.1f} MB "
+            "size budget; try a lower resolution"
+        )
+
     # Segments exist only to survive a crash. Once the real output is on disk
     # they are dead weight - an 8K run leaves tens of gigabytes behind.
     if dest.exists() and dest.stat().st_size > 0:
@@ -333,6 +413,11 @@ def upscale_video(
         "model": spec.key, "provider": eng.provider,
         "providers": eng.active_providers,
         "audio": info.has_audio, "output": str(dest),
+        "source_bytes": source_bytes,
+        "output_bytes": output_bytes,
+        "size_ratio": round(expansion_ratio(source_bytes, output_bytes), 3),
+        "size_budget_bytes": budget_bytes,
+        "target_video_bitrate": target_bitrate,
     }
 
 
@@ -365,7 +450,7 @@ def _concat(
             "-f", "concat", "-safe", "0", "-i", listing.name]
     if has_audio:
         args += ["-i", str(original.resolve()), "-map", "0:v:0", "-map", "1:a:0",
-                 "-c:a", "aac", "-b:a", "192k", "-shortest"]
+                 "-c:a", "aac", "-b:a", str(AUDIO_BITRATE), "-shortest"]
     args += ["-c:v", "copy", "-movflags", "+faststart", str(dest.resolve())]
 
     res = subprocess.run(args, capture_output=True, text=True, cwd=str(seg_dir))

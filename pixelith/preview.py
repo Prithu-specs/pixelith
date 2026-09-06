@@ -23,7 +23,7 @@ import numpy as np
 
 from .config import WORK_DIR, UpscaleSettings
 from .engine import Engine
-from .pipeline import _postprocess, plan
+from .pipeline import _postprocess, fit_to_canvas, plan
 from .video import VideoError, probe
 
 PREVIEW_DIR = WORK_DIR / "previews"
@@ -119,7 +119,15 @@ def run(
         used_index = None
 
     h, w = rgb.shape[:2]
-    p = plan(w, h, settings.preset, settings.scale, spec.scale)
+    p = plan(
+        w,
+        h,
+        settings.preset,
+        settings.scale,
+        spec.scale,
+        settings.aspect_ratio,
+        settings.aspect_mode,
+    )
 
     started = time.perf_counter()
     current = rgb
@@ -127,7 +135,9 @@ def run(
         current = eng.upscale(current)
     out = Image.fromarray(current)
     if (out.width, out.height) != (p.out_width, p.out_height):
-        out = out.resize((p.out_width, p.out_height), Image.LANCZOS)
+        out = fit_to_canvas(
+            out, (p.out_width, p.out_height), settings.aspect_mode
+        )
     out = _postprocess(out, settings)
     elapsed = time.perf_counter() - started
 

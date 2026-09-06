@@ -80,6 +80,11 @@ FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
 ## Features
 
 - **Images and video**, up to 8K output, from a single tool.
+- **Aspect-ratio conversion.** Keep the source shape or produce exact 16:9,
+  4:3, 1:1 and 9:16 canvases using Fit, Fill or Stretch framing.
+- **Bounded output size.** Pixelith targets no more than 3x the source file and
+  enforces an absolute 1 GB ceiling. Video bitrate is calculated from duration;
+  JPEG and WEBP quality is reduced only when the budget requires it.
 - **Fully local.** Inference happens on your machine. No telemetry, no accounts,
   no API keys, no upload step. After the first run the whole thing works offline.
 - **Two models, honestly labelled** — a 4.6 MB compact network for speed and a
@@ -355,6 +360,9 @@ python -m pixelith upscale portrait.png --model quality --preset 4k
 # A short clip to 4K with the fast model — start small, this takes a while
 python -m pixelith upscale clip.mp4 --model fast --preset 4k
 
+# Convert 4:3 SD to an exact 1280x720 canvas without losing content
+python -m pixelith upscale sd.mp4 --preset 720p --aspect-ratio 16:9 --aspect-mode fit
+
 # An explicit scale factor instead of a named preset
 python -m pixelith upscale scan.tif --scale 2.0
 ```
@@ -368,6 +376,8 @@ python -m pixelith upscale scan.tif --scale 2.0
 | `--denoise`, `--sharpen` | Post-process strength, `0.0`–`1.0` |
 | `--quality` | JPEG/WebP encoder quality, default `95` |
 | `--tile` | Tile size override — lower it if you run out of memory |
+| `--aspect-ratio` | `source`, `16:9`, `4:3`, `1:1`, or `9:16` |
+| `--aspect-mode` | `fit` keeps everything with bars, `fill` crops, `stretch` distorts |
 | `--single-device` | Disable automatic CPU/GPU/NPU cooperation |
 | `-y`, `--yes` | Skip the confirmation prompt on long jobs |
 
@@ -632,14 +642,16 @@ and falls again at the far edge, applied on both axes. Contributions accumulate
 into a float buffer alongside a weight buffer, and the final pixel is their
 ratio. Seams disappear because neighbouring tiles cross-fade rather than abut.
 
-**5. Resample to target.** The network output is a fixed 4x. If your preset asks
-for something other than 4x, the result is resampled to hit it exactly, which is
-why a 4K target and an 8K target from the same source cost the same. Ratios above
-4x trigger a second full pass.
+**5. Frame and resample to target.** The network output is a fixed 4x. The
+result is resampled once and then fitted, cropped or stretched onto the exact
+requested aspect-ratio canvas. Ratios above 4x trigger a second full pass.
 
-**6. Reassemble.** Stills are written in your chosen format; outputs above 80
-megapixels are streamed to disk tile by tile rather than held in RAM. Video
-frames are re-encoded by FFmpeg and the original audio is muxed back in.
+**6. Compress and reassemble.** Stills are written in the chosen format and
+video bitrate is calculated from duration. A result may not exceed 3x its
+source-file size or 1 GB. Lossless PNG fails clearly when that budget is
+impossible rather than silently changing format. Outputs above 80 megapixels
+are streamed to disk tile by tile rather than held in RAM. Video frames are
+re-encoded by FFmpeg and the original audio is muxed back in.
 
 Provider selection happens once, at model load, using the measured per-model
 preference order in `pixelith/config.py`. If a provider fails to initialise,

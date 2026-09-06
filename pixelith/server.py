@@ -20,7 +20,9 @@ from pydantic import BaseModel, Field
 
 from . import __version__, license_info, pricing
 from . import DEFAULT_CURRENCY as _DEFAULT_CURRENCY
-from .config import MODELS, PRESETS, WORK_DIR, UpscaleSettings
+from .compression import OutputTooLarge, output_budget, video_bitrate
+from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, PRESETS, WORK_DIR,
+                     UpscaleSettings)
 from .engine import available_providers, choose_providers
 from .hardware import describe as describe_hardware
 from . import licensing, preview as preview_mod
@@ -52,6 +54,9 @@ class EstimateRequest(BaseModel):
     model: str = "fast"
     preset: str | None = None
     scale: float | None = None
+    aspect_ratio: str = "source"
+    aspect_mode: str = "fit"
+    source_bytes: int | None = Field(default=None, gt=0)
 
 
 @app.get("/api/health")
@@ -95,7 +100,15 @@ def estimate(req: EstimateRequest) -> dict:
         raise HTTPException(400, f"unknown model {req.model!r}")
     spec = MODELS[req.model]
     try:
-        p = plan(req.width, req.height, req.preset, req.scale, spec.scale)
+        p = plan(
+            req.width,
+            req.height,
+            req.preset,
+            req.scale,
+            spec.scale,
+            req.aspect_ratio,
+            req.aspect_mode,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -116,6 +129,22 @@ def estimate(req: EstimateRequest) -> dict:
     elif seconds > 600:
         warning = f"This will take a while ({human_time(seconds)})."
 
+    budget_bytes = output_budget(req.source_bytes) if req.source_bytes else None
+    target_video_bitrate = None
+    if (
+        req.kind == "video"
+        and budget_bytes
+        and req.frames
+        and req.fps
+        and req.fps > 0
+    ):
+        try:
+            target_video_bitrate = video_bitrate(
+                req.frames / req.fps, budget_bytes, has_audio=True
+            )
+        except (ValueError, OutputTooLarge):
+            target_video_bitrate = None
+
     return {
         "output_width": p.out_width,
         "output_height": p.out_height,
@@ -123,6 +152,15 @@ def estimate(req: EstimateRequest) -> dict:
         "seconds": round(seconds, 1),
         "human": human_time(seconds),
         "warning": warning,
+        "size_budget_bytes": budget_bytes,
+        "max_size_ratio": (
+            round(budget_bytes / req.source_bytes, 2)
+            if budget_bytes and req.source_bytes else None
+        ),
+        "target_video_bitrate": target_video_bitrate,
+        "compression_policy": (
+            "adaptive_bitrate" if req.kind == "video" else "adaptive_quality"
+        ),
     }
 
 
@@ -135,6 +173,8 @@ async def create_job(
     denoise: float = Form(0.0),
     sharpen: float = Form(0.0),
     quality: int = Form(95),
+    aspect_ratio: str = Form("source"),
+    aspect_mode: str = Form("fit"),
     format: str | None = Form(None),
 ) -> JSONResponse:
     name = Path(file.filename or "upload").name
@@ -146,6 +186,10 @@ async def create_job(
         raise HTTPException(400, f"unknown model {model!r}")
     if preset and preset.lower() not in PRESETS:
         raise HTTPException(400, f"unknown preset {preset!r}")
+    if aspect_ratio not in ASPECT_RATIOS:
+        raise HTTPException(400, f"unknown aspect ratio {aspect_ratio!r}")
+    if aspect_mode not in ASPECT_MODES:
+        raise HTTPException(400, f"unknown aspect mode {aspect_mode!r}")
 
     dest = UPLOAD_DIR / f"{int(time.time() * 1000)}_{name}"
     size = 0
@@ -198,6 +242,8 @@ async def create_job(
         denoise=max(0.0, min(1.0, denoise)),
         sharpen=max(0.0, min(1.0, sharpen)),
         quality=max(1, min(100, quality)),
+        aspect_ratio=aspect_ratio,
+        aspect_mode=aspect_mode,
     )
     try:
         job = MANAGER.submit(dest, name, settings, out_format=format)
@@ -249,6 +295,8 @@ async def make_preview(
     scale: float | None = Form(None),
     denoise: float = Form(0.0),
     sharpen: float = Form(0.0),
+    aspect_ratio: str = Form("source"),
+    aspect_mode: str = Form("fit"),
 ) -> dict:
     """Upscale one frame at the chosen settings, before committing to the job."""
     name = Path(file.filename or "upload").name
@@ -258,6 +306,10 @@ async def make_preview(
         raise HTTPException(415, str(exc)) from exc
     if model not in MODELS:
         raise HTTPException(400, f"unknown model {model!r}")
+    if aspect_ratio not in ASPECT_RATIOS:
+        raise HTTPException(400, f"unknown aspect ratio {aspect_ratio!r}")
+    if aspect_mode not in ASPECT_MODES:
+        raise HTTPException(400, f"unknown aspect mode {aspect_mode!r}")
 
     dest = UPLOAD_DIR / f"preview_{int(time.time() * 1000)}_{name}"
     size = 0
@@ -280,6 +332,8 @@ async def make_preview(
         scale=scale if (scale and not preset) else None,
         denoise=max(0.0, min(1.0, denoise)),
         sharpen=max(0.0, min(1.0, sharpen)),
+        aspect_ratio=aspect_ratio,
+        aspect_mode=aspect_mode,
     )
     try:
         result = preview_mod.run(dest, kind, settings)

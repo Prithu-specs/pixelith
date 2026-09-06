@@ -21,8 +21,9 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from . import compat  # registers the HEIF opener as a side effect
 from . import licensing, watermark
-from .config import (LARGE_IMAGE_PIXELS, MODELS, PRESETS, UpscaleSettings,
-                     resolve_preset)
+from .compression import expansion_ratio, output_budget, save_image
+from .config import (ASPECT_MODES, ASPECT_RATIOS, LARGE_IMAGE_PIXELS, MODELS,
+                     PRESETS, UpscaleSettings, resolve_preset)
 from .engine import Engine
 
 Image.MAX_IMAGE_PIXELS = None  # we do our own size guarding
@@ -39,6 +40,8 @@ class Plan:
     passes: int
     effective_scale: float
     downsample: bool
+    aspect_ratio: str = "source"
+    aspect_mode: str = "fit"
 
     def as_dict(self) -> dict:
         return {
@@ -48,7 +51,19 @@ class Plan:
             "output_height": self.out_height,
             "passes": self.passes,
             "effective_scale": round(self.effective_scale, 3),
+            "aspect_ratio": self.aspect_ratio,
+            "aspect_mode": self.aspect_mode,
         }
+
+
+def _aspect_dimensions(width: int, height: int, aspect_ratio: str) -> tuple[int, int]:
+    ratio = ASPECT_RATIOS[aspect_ratio]
+    if ratio is None:
+        return width, height
+    numerator, denominator = ratio
+    if numerator >= denominator:
+        return max(1, round(height * numerator / denominator)), height
+    return height, max(1, round(height * denominator / numerator))
 
 
 def plan(
@@ -57,28 +72,42 @@ def plan(
     preset: str | None = None,
     scale: float | None = None,
     model_scale: int = 4,
+    aspect_ratio: str = "source",
+    aspect_mode: str = "fit",
 ) -> Plan:
     """Work out the output size and how many network passes get us there."""
     if src_w <= 0 or src_h <= 0:
         raise ValueError("source dimensions must be positive")
+    if aspect_ratio not in ASPECT_RATIOS:
+        raise ValueError(f"unknown aspect ratio {aspect_ratio!r}")
+    if aspect_mode not in ASPECT_MODES:
+        raise ValueError(f"unknown aspect mode {aspect_mode!r}")
 
     if preset:
         key = resolve_preset(preset)
         if key not in PRESETS:
             raise ValueError(f"unknown preset {preset!r}; try {sorted(PRESETS)}")
         box_w, box_h = PRESETS[key]
-        # Fit inside the preset box, preserving aspect ratio.
-        ratio = min(box_w / src_w, box_h / src_h)
-        out_w, out_h = round(src_w * ratio), round(src_h * ratio)
+        if aspect_ratio == "source":
+            # Fit inside the preset box, preserving source aspect ratio.
+            ratio = min(box_w / src_w, box_h / src_h)
+            out_w, out_h = round(src_w * ratio), round(src_h * ratio)
+        else:
+            out_w, out_h = _aspect_dimensions(box_w, box_h, aspect_ratio)
     elif scale:
         if scale <= 0:
             raise ValueError("scale must be positive")
         out_w, out_h = round(src_w * scale), round(src_h * scale)
+        if aspect_ratio != "source":
+            out_w, out_h = _aspect_dimensions(out_w, out_h, aspect_ratio)
     else:
         out_w, out_h = src_w * model_scale, src_h * model_scale
 
     out_w, out_h = max(1, out_w), max(1, out_h)
-    needed = max(out_w / src_w, out_h / src_h)
+    if aspect_mode == "fit" and aspect_ratio != "source":
+        needed = min(out_w / src_w, out_h / src_h)
+    else:
+        needed = max(out_w / src_w, out_h / src_h)
 
     if needed <= 1.0:
         passes = 0
@@ -87,8 +116,44 @@ def plan(
         passes = max(1, passes)
 
     return Plan(
-        src_w, src_h, out_w, out_h, passes, needed, downsample=needed < model_scale**passes
+        src_w,
+        src_h,
+        out_w,
+        out_h,
+        passes,
+        needed,
+        downsample=needed < model_scale**passes,
+        aspect_ratio=aspect_ratio,
+        aspect_mode=aspect_mode,
     )
+
+
+def fit_to_canvas(
+    image: Image.Image,
+    size: tuple[int, int],
+    mode: str = "fit",
+) -> Image.Image:
+    """Render an image into a fixed canvas by fitting, cropping or stretching."""
+    if mode not in ASPECT_MODES:
+        raise ValueError(f"unknown aspect mode {mode!r}")
+    if mode == "stretch":
+        return image.resize(size, Image.LANCZOS)
+    if mode == "fill":
+        return ImageOps.fit(image, size, Image.LANCZOS, centering=(0.5, 0.5))
+
+    fitted = ImageOps.contain(image, size, Image.LANCZOS)
+    if image.mode == "RGBA":
+        colour = (0, 0, 0, 0)
+    elif image.mode == "L":
+        colour = 0
+    else:
+        colour = (0, 0, 0)
+    canvas = Image.new(image.mode, size, colour)
+    canvas.paste(
+        fitted,
+        ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2),
+    )
+    return canvas
 
 
 def estimate_seconds(
@@ -184,7 +249,15 @@ def upscale_image(
     eng = engine or Engine(spec, settings)
     rgb, alpha, mode = _load_rgb(src)
     h, w = rgb.shape[:2]
-    p = plan(w, h, settings.preset, settings.scale, spec.scale)
+    p = plan(
+        w,
+        h,
+        settings.preset,
+        settings.scale,
+        spec.scale,
+        settings.aspect_ratio,
+        settings.aspect_mode,
+    )
 
     if (p.out_width * p.out_height) > LARGE_IMAGE_PIXELS * 4:
         raise ValueError(
@@ -210,7 +283,9 @@ def upscale_image(
     out = Image.fromarray(current)
     if (out.width, out.height) != (p.out_width, p.out_height):
         emit(0.94, "resampling to target size")
-        out = out.resize((p.out_width, p.out_height), Image.LANCZOS)
+        out = fit_to_canvas(
+            out, (p.out_width, p.out_height), settings.aspect_mode
+        )
 
     out = _postprocess(out, settings)
 
@@ -236,20 +311,21 @@ def upscale_image(
 
     if alpha is not None:
         emit(0.97, "restoring transparency")
-        a = Image.fromarray(alpha).resize((p.out_width, p.out_height), Image.LANCZOS)
+        a = fit_to_canvas(
+            Image.fromarray(alpha),
+            (p.out_width, p.out_height),
+            settings.aspect_mode,
+        )
         out = out.convert("RGBA")
         out.putalpha(a)
 
     emit(0.98, "writing file")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    suffix = dest.suffix.lower()
-    if suffix in (".jpg", ".jpeg"):
-        out.convert("RGB").save(dest, quality=settings.quality, subsampling=0,
-                                optimize=True, progressive=True)
-    elif suffix == ".webp":
-        out.save(dest, quality=settings.quality, method=5)
-    else:
-        out.save(dest, optimize=True)
+    source_bytes = src.stat().st_size
+    budget_bytes = output_budget(source_bytes, settings.max_output_multiplier)
+    output_bytes, encoded_quality = save_image(
+        out, dest, settings.quality, budget_bytes
+    )
 
     licensing.record(images=1)
 
@@ -264,4 +340,9 @@ def upscale_image(
         "output": str(dest),
         "had_alpha": alpha is not None,
         "source_mode": mode,
+        "source_bytes": source_bytes,
+        "output_bytes": output_bytes,
+        "size_ratio": round(expansion_ratio(source_bytes, output_bytes), 3),
+        "size_budget_bytes": budget_bytes,
+        "encoded_quality": encoded_quality,
     }

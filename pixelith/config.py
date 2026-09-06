@@ -119,6 +119,22 @@ PRESETS: dict[str, tuple[int, int]] = {
 PRESET_ALIASES: dict[str, str] = {"hd": "1080p", "fhd": "1080p", "1440p": "2k",
                                   "2160p": "4k", "4320p": "8k"}
 
+# Output canvas shape. ``source`` preserves the incoming ratio; the named
+# ratios create a real fixed-size canvas at the selected resolution.
+ASPECT_RATIOS: dict[str, tuple[int, int] | None] = {
+    "source": None,
+    "16:9": (16, 9),
+    "4:3": (4, 3),
+    "1:1": (1, 1),
+    "9:16": (9, 16),
+}
+ASPECT_MODES = ("fit", "fill", "stretch")
+
+# A finished file must satisfy both limits. Three times the source is the
+# normal ceiling; one decimal GB is the non-negotiable hard ceiling.
+MAX_OUTPUT_MULTIPLIER = 3.0
+MAX_OUTPUT_BYTES = 1_000_000_000
+
 
 def resolve_preset(name: str) -> str:
     """Canonical preset key for a user-supplied name."""
@@ -142,6 +158,9 @@ class UpscaleSettings:
     denoise: float = 0.0
     sharpen: float = 0.0
     quality: int = 95
+    aspect_ratio: str = "source"
+    aspect_mode: str = "fit"
+    max_output_multiplier: float = MAX_OUTPUT_MULTIPLIER
     providers: list[str] = field(default_factory=list)
     # Use heterogeneous hardware automatically. Core ML, NNAPI and OpenVINO
     # coordinate CPU/GPU/NPU inside one runtime. Discrete accelerators may get a

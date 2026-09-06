@@ -11,8 +11,8 @@ import time
 from pathlib import Path
 
 from . import __version__, license_info
-from .config import (MODELS, OUTPUT_DIR, PRESETS, WORK_DIR, UpscaleSettings,
-                     resolve_preset)
+from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, OUTPUT_DIR, PRESETS,
+                     WORK_DIR, UpscaleSettings, resolve_preset)
 from .engine import Cancelled, Engine, available_providers, choose_providers
 from . import licensing, watermark
 from .models import ensure, is_available, status as model_status
@@ -306,6 +306,7 @@ def cmd_upscale(args: argparse.Namespace) -> int:
         model=args.model, preset=args.preset, scale=args.scale,
         denoise=args.denoise, sharpen=args.sharpen, quality=args.quality,
         tile=args.tile, hybrid=not args.single_device,
+        aspect_ratio=args.aspect_ratio, aspect_mode=args.aspect_mode,
     )
     spec = settings.resolved_model()
     is_video = src.suffix.lower() not in IMAGE_SUFFIXES
@@ -323,7 +324,15 @@ def cmd_upscale(args: argparse.Namespace) -> int:
             w, h = ImageOps.exif_transpose(im).size
         frames = 1
 
-    p = plan(w, h, settings.preset, settings.scale, spec.scale)
+    p = plan(
+        w,
+        h,
+        settings.preset,
+        settings.scale,
+        spec.scale,
+        settings.aspect_ratio,
+        settings.aspect_mode,
+    )
     est = estimate_seconds(w, h, p, spec.key, frames=frames)
 
     if args.output:
@@ -434,6 +443,18 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--sharpen", type=float, default=0.0)
     u.add_argument("--quality", type=int, default=95, help="JPEG/WebP quality")
     u.add_argument("--tile", type=int, help="tile size override")
+    u.add_argument(
+        "--aspect-ratio",
+        default="source",
+        choices=list(ASPECT_RATIOS),
+        help="output canvas ratio; default preserves the source",
+    )
+    u.add_argument(
+        "--aspect-mode",
+        default="fit",
+        choices=ASPECT_MODES,
+        help="fit adds bars, fill crops, stretch distorts",
+    )
     u.add_argument(
         "--single-device",
         action="store_true",

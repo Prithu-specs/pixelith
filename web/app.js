@@ -60,6 +60,7 @@ const el = {
   presetScale:$('#preset-scale'),
   presetDetail:$('#preset-detail'),
   presetTicks:$('#preset-ticks'),
+  resolutionOptions:$('#resolution-options'),
   pricePersonal:$('#price-personal'),
   priceCommercial:$('#price-commercial'),
   paywallTax:$('#paywall-tax'),
@@ -86,6 +87,8 @@ const el = {
   scalePane:    $('#scale-pane'),
   scale:        $('#scale'),
   scaleOut:     $('#scale-out'),
+  aspectRatio:  $('#aspect-ratio'),
+  aspectMode:   $('#aspect-mode'),
   denoise:      $('#denoise'),
   denoiseOut:   $('#denoise-out'),
   sharpen:      $('#sharpen'),
@@ -343,6 +346,8 @@ function readSettings() {
     targetMode: modeInput ? modeInput.value : 'preset',
     preset: currentPreset(),
     scale: parseFloat(el.scale.value),
+    aspectRatio: el.aspectRatio.value,
+    aspectMode: el.aspectMode.value,
     denoise: parseFloat(el.denoise.value),
     sharpen: parseFloat(el.sharpen.value),
     imageFormat: el.imageFormat.value,
@@ -361,12 +366,15 @@ function applySettings(s) {
     if (r) r.checked = true;
   }
   if (Number.isFinite(s.scale)) el.scale.value = clamp(s.scale, 1.5, 8);
+  if (s.aspectRatio) el.aspectRatio.value = s.aspectRatio;
+  if (s.aspectMode) el.aspectMode.value = s.aspectMode;
   if (Number.isFinite(s.denoise)) el.denoise.value = clamp(s.denoise, 0, 1);
   if (Number.isFinite(s.sharpen)) el.sharpen.value = clamp(s.sharpen, 0, 1);
   if (s.imageFormat) el.imageFormat.value = s.imageFormat;
   if (s.videoFormat) el.videoFormat.value = s.videoFormat;
   syncSliderOutputs();
   syncTargetMode();
+  syncAspectControls();
 }
 
 function syncSliderOutputs() {
@@ -379,6 +387,18 @@ function syncTargetMode() {
   const mode = ($('input[name="target-mode"]:checked') || {}).value || 'preset';
   el.presetPane.hidden = mode !== 'preset';
   el.scalePane.hidden = mode !== 'scale';
+}
+
+function syncAspectControls() {
+  el.aspectMode.disabled = el.aspectRatio.value === 'source';
+  renderPreset();
+}
+
+function geometryPayload() {
+  return {
+    aspect_ratio: el.aspectRatio.value,
+    aspect_mode: el.aspectMode.value,
+  };
 }
 
 /**
@@ -513,6 +533,7 @@ async function loadPresets() {
   // Ticks under the track, one per stop.
   el.presetScale.textContent = '';
   el.presetTicks.textContent = '';
+  el.resolutionOptions.textContent = '';
   presetKeys.forEach((key, i) => {
     const span = document.createElement('span');
     span.textContent = prettyPreset(key);
@@ -521,6 +542,25 @@ async function loadPresets() {
     opt.value = String(i);
     opt.label = prettyPreset(key);
     el.presetTicks.appendChild(opt);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'resolution-option';
+    button.dataset.index = String(i);
+    button.setAttribute('role', 'radio');
+    const [width, height] = presets[key];
+    const name = document.createElement('strong');
+    name.textContent = prettyPreset(key);
+    const dimensions = document.createElement('span');
+    dimensions.textContent = `${width} \u00d7 ${height}`;
+    button.append(name, dimensions);
+    button.addEventListener('click', () => {
+      el.preset.value = String(i);
+      renderPreset();
+      saveSettings();
+      scheduleEstimate();
+    });
+    el.resolutionOptions.appendChild(button);
   });
 
   const saved = loadSettings().preset;
@@ -562,6 +602,10 @@ function renderPreset() {
       span.classList.remove('is-down');
     }
   });
+  [...el.resolutionOptions.children].forEach((button, i) => {
+    button.classList.toggle('is-current', i === idx);
+    button.setAttribute('aria-checked', i === idx ? 'true' : 'false');
+  });
 
   if (!src) {
     setText(el.presetDetail, `Fits inside ${boxW} \u00d7 ${boxH}.`);
@@ -569,9 +613,23 @@ function renderPreset() {
     return;
   }
 
-  const ratio = Math.min(boxW / src.width, boxH / src.height);
-  const outW = Math.round(src.width * ratio);
-  const outH = Math.round(src.height * ratio);
+  const aspect = el.aspectRatio.value;
+  let ratio = Math.min(boxW / src.width, boxH / src.height);
+  let outW = Math.round(src.width * ratio);
+  let outH = Math.round(src.height * ratio);
+  if (aspect !== 'source') {
+    const [aw, ah] = aspect.split(':').map(Number);
+    if (aw >= ah) {
+      outH = boxH;
+      outW = Math.round(outH * aw / ah);
+    } else {
+      outW = boxH;
+      outH = Math.round(outW * ah / aw);
+    }
+    ratio = el.aspectMode.value === 'fit'
+      ? Math.min(outW / src.width, outH / src.height)
+      : Math.max(outW / src.width, outH / src.height);
+  }
   const down = ratio <= 1;
   // Equal size is neither an upscale nor a downscale; say so rather than
   // claiming the target is smaller when it is identical.
@@ -825,6 +883,8 @@ async function runEstimates() {
       fps: item.source.fps,
       model,
       ...target,
+      ...geometryPayload(),
+      source_bytes: item.file.size,
     };
     try {
       const data = await api('/estimate', {
@@ -902,6 +962,14 @@ function renderEstimates(results) {
         bits.push(`${formatDims(res.item.source.width, res.item.source.height)} → ${formatDims(d.output_width, d.output_height)}`);
       }
       if (Number.isFinite(d.passes) && d.passes > 1) bits.push(`${d.passes} passes`);
+      if (d.size_budget_bytes) {
+        const ratio = Number.isFinite(d.max_size_ratio)
+          ? ` (${d.max_size_ratio.toFixed(1)}\u00d7 source)` : '';
+        bits.push(`size limit ${formatBytes(d.size_budget_bytes)}${ratio}`);
+      }
+      if (d.target_video_bitrate) {
+        bits.push(`adaptive video ~${(d.target_video_bitrate / 1e6).toFixed(2)} Mbps`);
+      }
       dims.textContent = bits.join('  ·  ');
       row.appendChild(dims);
 
@@ -976,6 +1044,8 @@ async function submitAll(event) {
     else fd.append('scale', String(target.scale));
     fd.append('denoise', el.denoise.value);
     fd.append('sharpen', el.sharpen.value);
+    fd.append('aspect_ratio', el.aspectRatio.value);
+    fd.append('aspect_mode', el.aspectMode.value);
     fd.append('format', item.kind === 'video' ? el.videoFormat.value : el.imageFormat.value);
 
     try {
@@ -1113,6 +1183,12 @@ function paintJob(view) {
     metaParts.push(formatDims(tgt.width, tgt.height));
   }
   if (job.model) metaParts.push(job.model);
+  if (job.report && job.report.output_bytes) {
+    metaParts.push(`${formatBytes(job.report.output_bytes)} output`);
+    if (Number.isFinite(job.report.size_ratio)) {
+      metaParts.push(`${job.report.size_ratio.toFixed(2)}× source size`);
+    }
+  }
   if (src.duration) metaParts.push(formatDuration(src.duration));
   const metaEl = $('.job__meta', node);
   metaEl.textContent = '';
@@ -1563,6 +1639,8 @@ async function runPreview(item) {
   else fd.append('scale', String(target.scale));
   fd.append('denoise', el.denoise.value);
   fd.append('sharpen', el.sharpen.value);
+  fd.append('aspect_ratio', el.aspectRatio.value);
+  fd.append('aspect_mode', el.aspectMode.value);
 
   try {
     const res = await api('/preview', { method: 'POST', body: fd });
@@ -1778,6 +1856,11 @@ function wireSettings() {
     renderPreset(); saveSettings(); scheduleEstimate();
   });
   [el.imageFormat, el.videoFormat].forEach((sel) => sel.addEventListener('change', saveSettings));
+  [el.aspectRatio, el.aspectMode].forEach((sel) => {
+    sel.addEventListener('change', () => {
+      syncAspectControls(); saveSettings(); scheduleEstimate();
+    });
+  });
 
   el.clearQueue.addEventListener('click', () => {
     staged.length = 0;
@@ -1826,6 +1909,7 @@ function init() {
   wireSettings();
   syncSliderOutputs();
   syncTargetMode();
+  syncAspectControls();
   syncJobsEmpty();
   updateSubmitState();
   boot();

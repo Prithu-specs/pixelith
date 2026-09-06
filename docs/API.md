@@ -5,7 +5,7 @@ static (no build step). All endpoints below are under `/api`.
 
 ## GET /api/health
 ```json
-{"status":"ok","version":"0.1.0","providers":["CPUExecutionProvider"],
+{"status":"ok","version":"0.3.0b4","providers":["CPUExecutionProvider"],
  "ffmpeg":true,"active":{"fast":"CoreMLExecutionProvider","quality":"CoreMLExecutionProvider"},
  "max_upload_bytes":8589934592}
 ```
@@ -29,10 +29,15 @@ alias for `1080p`.
 
 ## POST /api/estimate
 Request: `{"kind":"video","width":1920,"height":1080,"frames":1800,"fps":30,
-           "model":"fast","preset":"8k"}`
+           "source_bytes":250000000,"model":"fast","preset":"720p",
+           "aspect_ratio":"16:9","aspect_mode":"fit"}`
 
 Pass **either** `preset` **or** `scale` (a float), never both; `preset` wins if
 both appear. With neither, the model's native factor is used.
+
+`aspect_ratio` is `source`, `16:9`, `4:3`, `1:1`, or `9:16`.
+`aspect_mode` is `fit` (bars, no lost content), `fill` (centre crop), or
+`stretch`. Supplying `source_bytes` adds the output-size budget to the response.
 
 Note on video: browsers cannot read a file's frame rate, so clients should send
 `fps: 30` as an assumption. The server re-probes the real rate on submission, so
@@ -40,15 +45,23 @@ the job's own `eta_seconds` supersedes this estimate - for 24 or 60 fps footage
 the pre-upload figure can be off by up to 2x.
 Response:
 ```json
-{"output_width":7680,"output_height":4320,"passes":1,"seconds":6800,
- "human":"about 1 hour 53 minutes","warning":"Long job. Consider 4K or the fast model."}
+{"output_width":1280,"output_height":720,"passes":1,"seconds":6800,
+ "human":"about 1 hour 53 minutes","size_budget_bytes":750000000,
+ "max_size_ratio":3.0,"target_video_bitrate":8420000,
+ "compression_policy":"adaptive_bitrate",
+ "warning":"Long job. Consider 4K or the fast model."}
 ```
 `warning` is `null` when there is nothing to flag.
 
 ## POST /api/jobs   (multipart/form-data)
 Fields: `file` (required), `model` (`fast`|`quality`), `preset` (`180p`…`8k`, optional),
 `scale` (float, optional — used when `preset` is absent), `denoise` (0–1),
-`sharpen` (0–1), `format` (`png`|`jpg`|`webp` for images; `mp4`|`mov` for video).
+`sharpen` (0–1), `aspect_ratio`, `aspect_mode`, and `format`
+(`png`|`jpg`|`webp` for images; `mp4`|`mov` for video).
+
+Every finished output is limited to three times its source-file size and to an
+absolute maximum of 1,000,000,000 bytes. Completed job reports include
+`source_bytes`, `output_bytes`, `size_ratio`, and `size_budget_bytes`.
 
 Response `201`: the full job object.
 
@@ -56,7 +69,8 @@ Response `201`: the full job object.
 Runs **one frame** through the real pipeline at the given settings, so a
 multi-hour job can be judged before it starts. Synchronous; it does not queue.
 
-Fields: `file` (required), `model`, `preset`, `scale`, `denoise`, `sharpen`.
+Fields: `file` (required), `model`, `preset`, `scale`, `denoise`, `sharpen`,
+`aspect_ratio`, `aspect_mode`.
 
 ```json
 {"id":"1287e1c8fe36","kind":"video",

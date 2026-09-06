@@ -242,7 +242,15 @@ class JobManager:
             if ext not in ("mp4", "mov"):
                 ext = "mp4"
 
-        p = plan(w, h, job.settings.preset, job.settings.scale, spec.scale)
+        p = plan(
+            w,
+            h,
+            job.settings.preset,
+            job.settings.scale,
+            spec.scale,
+            job.settings.aspect_ratio,
+            job.settings.aspect_mode,
+        )
         job.target = {"width": p.out_width, "height": p.out_height}
         job.eta_seconds = estimate_seconds(w, h, p, spec.key, frames=frames)
 

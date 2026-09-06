@@ -1,7 +1,9 @@
 """Scale planning and time formatting - pure logic, no model needed."""
 import pytest
 
-from pixelith.pipeline import human_time, plan
+from PIL import Image
+
+from pixelith.pipeline import fit_to_canvas, human_time, plan
 
 
 def test_preset_preserves_aspect_ratio():
@@ -15,6 +17,45 @@ def test_non_16_9_source_fits_inside_the_preset_box():
     assert p.out_height == 4320
     assert p.out_width <= 7680
     assert abs(p.out_width / p.out_height - 4 / 3) < 0.01
+
+
+def test_sd_source_can_become_exact_16_by_9_720p():
+    p = plan(
+        640,
+        480,
+        preset="720p",
+        aspect_ratio="16:9",
+        aspect_mode="fit",
+    )
+    assert (p.out_width, p.out_height) == (1280, 720)
+    assert p.passes == 1
+
+
+def test_portrait_ratio_rotates_the_resolution_canvas():
+    p = plan(640, 480, preset="720p", aspect_ratio="9:16")
+    assert (p.out_width, p.out_height) == (720, 1280)
+
+
+def test_fit_adds_bars_without_losing_content():
+    source = Image.new("RGB", (640, 480), (255, 0, 0))
+    output = fit_to_canvas(source, (1280, 720), "fit")
+    assert output.size == (1280, 720)
+    assert output.getpixel((0, 360)) == (0, 0, 0)
+    assert output.getpixel((640, 360)) == (255, 0, 0)
+
+
+def test_fill_crops_to_the_canvas_without_bars():
+    source = Image.new("RGB", (640, 480), (255, 0, 0))
+    output = fit_to_canvas(source, (1280, 720), "fill")
+    assert output.size == (1280, 720)
+    assert output.getpixel((0, 360)) == (255, 0, 0)
+
+
+def test_rejects_unknown_aspect_settings():
+    with pytest.raises(ValueError):
+        plan(640, 480, preset="720p", aspect_ratio="cinemascope")
+    with pytest.raises(ValueError):
+        plan(640, 480, preset="720p", aspect_mode="distort-sometimes")
 
 
 def test_small_source_needs_two_passes():
@@ -150,3 +191,14 @@ def test_cli_accepts_the_hd_alias_like_the_api_does():
 
     args = build_parser().parse_args(["upscale", "x.png", "-p", "hd"])
     assert args.preset == "1080p"
+
+
+def test_cli_accepts_aspect_ratio_and_framing():
+    from pixelith.cli import build_parser
+
+    args = build_parser().parse_args([
+        "upscale", "x.png", "-p", "720p",
+        "--aspect-ratio", "16:9", "--aspect-mode", "fill",
+    ])
+    assert args.aspect_ratio == "16:9"
+    assert args.aspect_mode == "fill"
