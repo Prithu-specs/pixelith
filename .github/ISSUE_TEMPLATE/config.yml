@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Pixelith community discussions
+    url: https://github.com/Prithu-specs/pixelith/discussions
+    about: Ask questions, share results and suggest workflows.
+  - name: Private security report
+    url: https://github.com/Prithu-specs/pixelith/security/advisories/new
+    about: Report security vulnerabilities privately.

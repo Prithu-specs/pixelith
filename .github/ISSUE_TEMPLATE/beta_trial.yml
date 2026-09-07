@@ -1,0 +1,129 @@
+name: Beta trial report
+description: Share a successful or unsuccessful Pixelith trial without uploading private media
+title: "[Beta trial] "
+labels:
+  - beta-feedback
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Pixelith. This report is public. Do not attach private photos, videos, file paths, licence keys, or personal information.
+
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Trial outcome
+      options:
+        - Completed successfully
+        - Completed, but quality was disappointing
+        - Cancelled because it was too slow
+        - Failed with an error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS Apple silicon
+        - macOS Intel
+        - Linux x86-64
+        - Linux ARM64
+        - Browser on Android
+        - Browser on iPhone or iPad
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: CPU, GPU or NPU model and RAM. General descriptions are fine.
+      placeholder: Apple M2, 16 GB RAM; or Ryzen 7 with RTX 3060
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: Pixelith version and execution provider
+      description: Copy these from the app header or `python -m pixelith info`.
+      placeholder: 0.40b4, CPUExecutionProvider
+    validations:
+      required: true
+
+  - type: dropdown
+    id: media
+    attributes:
+      label: Media type
+      options:
+        - Image
+        - Video
+    validations:
+      required: true
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Source and selected settings
+      description: Do not attach the source file. Resolution, duration, approximate file size, model, target, aspect ratio, framing and FPS are enough.
+      placeholder: 640x480 MP4, 10 seconds, 18 MB; Fast model; 1080p; 16:9 Fit; source FPS
+    validations:
+      required: true
+
+  - type: input
+    id: elapsed
+    attributes:
+      label: Estimated and actual processing time
+      placeholder: Estimated 4 min 20 sec; actual 4 min 48 sec
+
+  - type: input
+    id: output
+    attributes:
+      label: Output size and source-size ratio
+      placeholder: 42 MB, 2.3x source size
+
+  - type: dropdown
+    id: quality
+    attributes:
+      label: Output quality
+      options:
+        - 5 - Excellent
+        - 4 - Good
+        - 3 - Acceptable
+        - 2 - Poor
+        - 1 - Unusable
+        - Could not complete
+    validations:
+      required: true
+
+  - type: dropdown
+    id: discovery
+    attributes:
+      label: How did you find Pixelith?
+      options:
+        - GitHub search or recommendation
+        - Search engine
+        - YouTube
+        - Reddit
+        - X or another social network
+        - Friend or colleague
+        - Blog, newsletter or media article
+        - Other
+
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What should improve next?
+      placeholder: What was confusing, slow, broken or unexpectedly good?
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Public-report confirmation
+      options:
+        - label: I have removed private media, personal information, local file paths and licence keys from this public report.
+          required: true

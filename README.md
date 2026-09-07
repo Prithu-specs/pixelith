@@ -18,6 +18,18 @@ honest set of numbers about how long things take.
 ![Providers](https://img.shields.io/badge/providers-CUDA%20%7C%20CoreML%20%7C%20DirectML%20%7C%20CPU-607D8B)
 ![Inference: 100% local](https://img.shields.io/badge/inference-100%25%20local-2E7D32)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-455A64)
+[![GitHub stars](https://img.shields.io/github/stars/Prithu-specs/pixelith)](https://github.com/Prithu-specs/pixelith/stargazers)
+[![Current beta](https://img.shields.io/badge/beta-v0.40b4-6f42c1)](https://github.com/Prithu-specs/pixelith/releases/tag/v0.40b4)
+[![Release downloads](https://img.shields.io/github/downloads/Prithu-specs/pixelith/total)](https://github.com/Prithu-specs/pixelith/releases)
+[![CI](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml/badge.svg)](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml)
+
+**[Download the current beta](https://github.com/Prithu-specs/pixelith/releases/tag/v0.40b4)** ·
+**[Share a beta trial report](https://github.com/Prithu-specs/pixelith/issues/new?template=beta_trial.yml)** ·
+**[Join the discussion](https://github.com/Prithu-specs/pixelith/discussions)**
+
+If Pixelith is useful, star the repository and choose **Watch → Custom →
+Releases**. That is the account-free way to follow new builds and helps other
+people discover the project.
 
 ---
 
@@ -61,6 +73,7 @@ FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
 ## Contents
 
 - [Features](#features)
+- [Beta testing guide](docs/BETA_TESTING.md)
 - [Requirements](#requirements)
 - [Which devices does this run on?](#which-devices-does-this-run-on)
 - [Install](#install)
