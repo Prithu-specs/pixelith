@@ -74,6 +74,7 @@ FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
 
 - [Features](#features)
 - [Beta testing guide](docs/BETA_TESTING.md)
+- [Plain-English licensing guide](docs/LICENSING.md)
 - [Requirements](#requirements)
 - [Which devices does this run on?](#which-devices-does-this-run-on)
 - [Install](#install)
@@ -814,8 +815,10 @@ source resolution is what you think it is, and that you are not running the
 ## FAQ
 
 **Is it actually free?**
-For non-commercial use, yes, and permanently. Commercial use needs a separate
-arrangement — see [License](#license).
+During the public beta, yes: personal and commercial use are both free and
+unlimited until **5 December 2026**. After that, the permanent free tier is for
+personal use within its allowances; commercial use requires a Commercial
+Licence. See the [plain-English licensing guide](docs/LICENSING.md).
 
 **Does anything get uploaded?**
 No. The only network request Pixelith ever makes is downloading the model files
@@ -841,8 +844,10 @@ stills you care about. If you are unsure, run one image through both and compare
 — it costs seconds.
 
 **Can I use this at work, or for client deliverables?**
-That is commercial use, and it is outside the licence. Open an issue to discuss
-terms.
+During the public beta, yes, until **5 December 2026**. After that date it
+requires a Commercial Licence. Redistribution, resale and hosted-service use
+always require separate written permission. See the
+[plain-English licensing guide](docs/LICENSING.md).
 
 **Is there face restoration?**
 Not yet. See [Limitations](#limitations).
@@ -872,6 +877,10 @@ recognised if your ONNX Runtime build provides it, but it is untested here.
 Pixelith is **copyright &copy; 2026 PGA Tech Solutions** and is licensed under the
 [**Pixelith End User Licence Agreement 1.0**](LICENSE)
 (SPDX: `LicenseRef-Pixelith-EULA-1.0`).
+
+For a shorter overview, read the
+[**plain-English Pixelith licensing guide**](docs/LICENSING.md). The EULA is the
+controlling legal agreement if the two ever differ.
 
 It is **source-available, not open source**. You can read the code, study it and
 modify it for your own use. Reading it does not grant rights beyond the licence.
