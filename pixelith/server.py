@@ -26,7 +26,7 @@ from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, PRESETS,
 from .engine import available_providers, choose_providers
 from .hardware import describe as describe_hardware
 from . import licensing, preview as preview_mod
-from .compat import summary as platform_summary
+from .compat import resource_root, summary as platform_summary
 from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
 from .models import status as model_status
 from .pipeline import estimate_seconds, human_time, plan
@@ -37,7 +37,7 @@ log = logging.getLogger("pixelith.server")
 MAX_UPLOAD_BYTES = 8 * 1024**3          # 8 GiB
 UPLOAD_DIR = WORK_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+WEB_DIR = resource_root() / "web"
 
 app = FastAPI(title="Pixelith", version=__version__)
 app.add_middleware(

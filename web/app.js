@@ -22,6 +22,15 @@
  * ========================================================================== */
 'use strict';
 
+// Android and iOS can install the interface as a companion app. The service
+// worker caches only the UI shell; media and API responses always stay local
+// and use the live Pixelith server.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 /* -------------------------------------------------------------------------- *
  * 1. Constants and element refs
  * -------------------------------------------------------------------------- */

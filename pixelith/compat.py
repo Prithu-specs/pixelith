@@ -98,6 +98,14 @@ def have_ffmpeg() -> bool:
     return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 
 
+def resource_root() -> Path:
+    """Root containing bundled read-only assets in source and frozen apps."""
+    from pathlib import Path
+
+    frozen = getattr(sys, "_MEIPASS", None)
+    return Path(frozen) if frozen else Path(__file__).resolve().parent.parent
+
+
 def summary() -> dict:
     return {
         "os": os_name(),

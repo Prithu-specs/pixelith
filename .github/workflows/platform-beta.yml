@@ -1,0 +1,110 @@
+name: Platform beta packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            label: Windows x64
+            artifact: Pixelith-Windows-x64
+          - runner: ubuntu-22.04
+            label: Linux x64
+            artifact: Pixelith-Linux-x64
+          - runner: ubuntu-24.04-arm
+            label: Linux ARM64
+            artifact: Pixelith-Linux-arm64
+          - runner: macos-15-intel
+            label: macOS Intel
+            artifact: Pixelith-macOS-Intel
+          - runner: macos-14
+            label: macOS Apple Silicon
+            artifact: Pixelith-macOS-Apple-Silicon
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install GTK runtime (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-3-0 libwebkit2gtk-4.1-0
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-desktop.txt pytest
+      - name: Test source
+        env:
+          PIXELITH_HOME: ${{ runner.temp }}/pixelith-home
+          PIXELITH_OUT: ${{ runner.temp }}/pixelith-out
+        run: pytest tests -q -m "not needs_model"
+      - name: Build desktop application
+        run: pyinstaller --noconfirm --clean packaging/pixelith.spec
+      - name: Smoke-test packaged application (Windows)
+        if: runner.os == 'Windows'
+        run: .\dist\Pixelith\Pixelith.exe --diagnose
+      - name: Smoke-test packaged application (Linux)
+        if: runner.os == 'Linux'
+        run: ./dist/Pixelith/Pixelith --diagnose
+      - name: Smoke-test packaged application (macOS)
+        if: runner.os == 'macOS'
+        run: ./dist/Pixelith.app/Contents/MacOS/Pixelith --diagnose
+      - name: Archive Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/Pixelith -DestinationPath "${{ matrix.artifact }}.zip"
+      - name: Archive Linux package
+        if: runner.os == 'Linux'
+        run: tar -C dist -czf "${{ matrix.artifact }}.tar.gz" Pixelith
+      - name: Archive macOS package
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent dist/Pixelith.app "${{ matrix.artifact }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.tar.gz
+          if-no-files-found: error
+
+  mobile-companion:
+    name: Android and iOS companion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate installable web app
+        run: python -m unittest tests.test_pwa -v
+      - name: Package companion app
+        run: tar -czf Pixelith-Mobile-Companion-PWA.tar.gz -C web index.html style.css app.js manifest.webmanifest icon.svg sw.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pixelith-Mobile-Companion-Android-iOS
+          path: Pixelith-Mobile-Companion-PWA.tar.gz
+
+  release:
+    name: Publish beta release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [desktop, mobile-companion]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: release-assets/*

@@ -1,0 +1,14 @@
+{
+  "name": "Pixelith — Local AI Upscaling",
+  "short_name": "Pixelith",
+  "description": "Control private image and video upscaling on your own computer.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f7fb",
+  "theme_color": "#5b5bd6",
+  "icons": [
+    {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

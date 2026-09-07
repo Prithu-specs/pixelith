@@ -19,11 +19,11 @@ honest set of numbers about how long things take.
 ![Inference: 100% local](https://img.shields.io/badge/inference-100%25%20local-2E7D32)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-455A64)
 [![GitHub stars](https://img.shields.io/github/stars/Prithu-specs/pixelith)](https://github.com/Prithu-specs/pixelith/stargazers)
-[![Current beta](https://img.shields.io/badge/beta-v0.40b4-6f42c1)](https://github.com/Prithu-specs/pixelith/releases/tag/v0.40b4)
+[![Current beta](https://img.shields.io/badge/beta-v0.41b1-6f42c1)](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b1)
 [![Release downloads](https://img.shields.io/github/downloads/Prithu-specs/pixelith/total)](https://github.com/Prithu-specs/pixelith/releases)
 [![CI](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml/badge.svg)](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml)
 
-**[Download the current beta](https://github.com/Prithu-specs/pixelith/releases/tag/v0.40b4)** ·
+**[Download the current beta](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b1)** ·
 **[Share a beta trial report](https://github.com/Prithu-specs/pixelith/issues/new?template=beta_trial.yml)** ·
 **[Join the discussion](https://github.com/Prithu-specs/pixelith/discussions)**
 
@@ -74,6 +74,7 @@ FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
 
 - [Features](#features)
 - [Beta testing guide](docs/BETA_TESTING.md)
+- [Windows, macOS, Linux, Android and iOS beta](docs/PLATFORM_BETA.md)
 - [Plain-English licensing guide](docs/LICENSING.md)
 - [Requirements](#requirements)
 - [Which devices does this run on?](#which-devices-does-this-run-on)
@@ -142,17 +143,17 @@ FFmpeg is needed for video: `brew install ffmpeg`, `apt install ffmpeg`, or
 
 ## Which devices does this run on?
 
-Pixelith is a small local web server plus a browser interface. That split is what
-makes it work everywhere: the computer does the maths, and *any* device with a
-browser can drive it.
+Pixelith ships packaged desktop engines plus an installable mobile companion.
+The computer performs the AI work; Android and iOS devices can drive it over a
+trusted local network. See the [platform beta guide](docs/PLATFORM_BETA.md).
 
 ### Runs the software itself
 
 | Platform | Status | Notes |
 |---|---|---|
-| **Windows** 10/11 (x64, ARM64) | Verified in CI | Real upscale of an image and a video on every push |
-| **macOS** 12+ (Apple silicon, Intel) | Verified in CI | Uses CoreML where it measures faster |
-| **Linux** (x86-64, aarch64) | Verified in CI | glibc and musl wheels both published |
+| **Windows** 10/11 (x64) | Tested and packaged in CI | Native-window beta; CPU and compatible accelerator runtimes |
+| **macOS** 12+ (Apple silicon, Intel) | Tested and packaged in CI | Separate Apple Silicon and Intel applications |
+| **Linux** (x86-64, aarch64) | Tested and packaged in CI | Separate x64 and ARM64 tarballs for modern glibc distributions |
 
 Measured on the CI runners, which are modest 3-4 core machines and a fair proxy
 for an ordinary laptop:
@@ -172,9 +173,9 @@ for an ordinary laptop:
 | **iPhone / iPad** | Same, in Safari. HEIC photos upload and convert correctly |
 | **Any laptop** on the network | Same address, any modern browser |
 
-Android and iOS cannot run the engine themselves — ONNX Runtime publishes no
-wheels for either — so there is no standalone mobile app, and this is not a
-limitation Pixelith can engineer around. Point the phone at a computer instead:
+Android and iOS install the Pixelith companion interface from the browser. The
+current mobile beta does not run AI inference on the phone; it points the phone
+at a computer instead:
 
 ```bash
 python -m pixelith serve --lan
