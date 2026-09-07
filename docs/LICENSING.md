@@ -86,4 +86,4 @@ This page is a plain-English convenience summary, not a substitute for the
 [Pixelith End User Licence Agreement 1.0](../LICENSE). If this page and the EULA
 differ, the EULA controls. It is not legal or tax advice. Beta terms are
 effective from 4 September 2026; post-beta pricing is scheduled from
-5 December 2026. Current release: Pixelith v0.41b2.
+5 December 2026. Current release: Pixelith v0.41b3.

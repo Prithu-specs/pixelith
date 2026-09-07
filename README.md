@@ -19,11 +19,11 @@ honest set of numbers about how long things take.
 ![Inference: 100% local](https://img.shields.io/badge/inference-100%25%20local-2E7D32)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-455A64)
 [![GitHub stars](https://img.shields.io/github/stars/Prithu-specs/pixelith)](https://github.com/Prithu-specs/pixelith/stargazers)
-[![Current beta](https://img.shields.io/badge/beta-v0.41b2-6f42c1)](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b2)
+[![Current beta](https://img.shields.io/badge/beta-v0.41b3-6f42c1)](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b3)
 [![Release downloads](https://img.shields.io/github/downloads/Prithu-specs/pixelith/total)](https://github.com/Prithu-specs/pixelith/releases)
 [![CI](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml/badge.svg)](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml)
 
-**[Download the current beta](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b2)** ·
+**[Download the current beta](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b3)** ·
 **[Share a beta trial report](https://github.com/Prithu-specs/pixelith/issues/new?template=beta_trial.yml)** ·
 **[Join the discussion](https://github.com/Prithu-specs/pixelith/discussions)**
 

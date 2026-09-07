@@ -7,7 +7,7 @@ takes about two minutes and does not require sending us your media.
 ## Install and run
 
 Download the latest tracked beta package from the
-[release page](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b2),
+[release page](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b3),
 extract it, and follow the README quick start. Start with one image or a
 5–10-second video rather than a full-length clip.
 

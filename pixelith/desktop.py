@@ -10,8 +10,8 @@ import threading
 import time
 import urllib.request
 
-from . import __version__
-from .compat import summary
+from pixelith import __version__
+from pixelith.compat import summary
 
 
 def free_port(preferred: int = 8420) -> int:
@@ -51,11 +51,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--diagnose", action="store_true")
     args = parser.parse_args(argv)
     if args.diagnose:
-        print(json.dumps(diagnostic(), sort_keys=True))
+        import sys
+        if sys.stdout is not None:
+            print(json.dumps(diagnostic(), sort_keys=True))
         return 0
 
     import uvicorn
-    from .server import app
+    from pixelith.server import app
 
     port = free_port(args.port)
     host = "0.0.0.0" if args.lan else "127.0.0.1"

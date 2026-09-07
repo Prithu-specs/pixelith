@@ -5,7 +5,7 @@ static (no build step). All endpoints below are under `/api`.
 
 ## GET /api/health
 ```json
-{"status":"ok","version":"0.41b2","providers":["CPUExecutionProvider"],
+{"status":"ok","version":"0.41b3","providers":["CPUExecutionProvider"],
  "ffmpeg":true,"active":{"fast":"CoreMLExecutionProvider","quality":"CoreMLExecutionProvider"},
  "max_upload_bytes":8589934592}
 ```

@@ -34,8 +34,8 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll, name="Pixelith.app", bundle_identifier="solutions.pgatech.pixelith",
         info_plist={
-            "CFBundleShortVersionString": "0.41b2",
-            "CFBundleVersion": "0.41.2",
+            "CFBundleShortVersionString": "0.41b3",
+            "CFBundleVersion": "0.41.3",
             "NSHighResolutionCapable": True,
         },
     )
