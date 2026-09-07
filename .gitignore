@@ -65,6 +65,7 @@ desktop.ini
 .vscode/
 *.swp
 *~
+:memory:.ses
 
 # ---- Licence signing material ----
 # The Ed25519 private key issues licence keys. Committing it would let anyone

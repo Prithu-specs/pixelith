@@ -4,7 +4,7 @@
 # is required. See LICENSE.
 """Pixelith - AI image and video upscaling, up to 8K."""
 
-__version__ = "0.41b1"
+__version__ = "0.41b2"
 
 # Licensing identity. Surfaced by the CLI, the HTTP API and the web UI so that
 # anyone running Pixelith is on notice about the terms, not just anyone who

@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 from PyInstaller.utils.hooks import collect_all
 
-root = Path(SPECPATH).parent.parent
+root = Path(SPECPATH).parent
 datas = [
     (str(root / "web"), "web"),
     (str(root / "LICENSE"), "."),
@@ -34,8 +34,8 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll, name="Pixelith.app", bundle_identifier="solutions.pgatech.pixelith",
         info_plist={
-            "CFBundleShortVersionString": "0.41b1",
-            "CFBundleVersion": "0.41.1",
+            "CFBundleShortVersionString": "0.41b2",
+            "CFBundleVersion": "0.41.2",
             "NSHighResolutionCapable": True,
         },
     )
