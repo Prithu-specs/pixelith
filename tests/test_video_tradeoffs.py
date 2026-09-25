@@ -11,7 +11,11 @@ from pixelith.server import EstimateRequest, estimate
 from pixelith.video import _encoder_args, probe, upscale_video
 
 
-def test_quality_mode_does_not_squeeze_long_hd_video_into_one_gb():
+def test_quality_mode_does_not_squeeze_long_hd_video_into_one_gb(monkeypatch):
+    monkeypatch.setattr(
+        "pixelith.video._available_encoders",
+        lambda: pytest.fail("quality mode probed FFmpeg encoders"),
+    )
     common = dict(kind="video", width=546, height=420, frames=135200, fps=25,
                   preset="1080p", aspect_ratio="16:9", source_bytes=297638055)
     limited = estimate(EstimateRequest(**common))

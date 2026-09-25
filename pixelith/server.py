@@ -6,14 +6,15 @@
 from __future__ import annotations
 
 import io
+import ipaddress
 import json
 import logging
 import shutil
-import time
+import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -40,9 +41,88 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 WEB_DIR = resource_root() / "web"
 
 app = FastAPI(title="Pixelith", version=__version__)
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
-)
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; "
+        "style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; "
+        "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+}
+
+
+def _host_parts(value: str) -> tuple[str, int | None]:
+    try:
+        parsed = urlsplit("//" + value)
+        return (parsed.hostname or "").lower(), parsed.port
+    except ValueError:
+        return "", None
+
+
+def _trusted_host(host: str) -> bool:
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local
+
+
+def _request_block_reason(
+    host_header: str,
+    origin: str | None,
+    scheme: str,
+    sec_fetch_site: str,
+) -> tuple[int, str] | None:
+    """Return a rejection response for unsafe browser-to-localhost requests."""
+    host, port = _host_parts(host_header)
+    if not host or not _trusted_host(host):
+        return 400, "untrusted host"
+
+    if origin:
+        try:
+            parsed = urlsplit(origin)
+            origin_host = (parsed.hostname or "").lower()
+            origin_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            request_port = port or (443 if scheme == "https" else 80)
+            same_origin = (
+                parsed.scheme == scheme
+                and origin_host == host
+                and origin_port == request_port
+            )
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return 403, "cross-origin request blocked"
+    if sec_fetch_site.lower() == "cross-site":
+        return 403, "cross-site request blocked"
+    return None
+
+
+@app.middleware("http")
+async def local_security_boundary(request: Request, call_next):
+    """Block DNS rebinding and cross-site control of the local API."""
+    blocked = _request_block_reason(
+        request.headers.get("host", ""),
+        request.headers.get("origin"),
+        request.url.scheme,
+        request.headers.get("sec-fetch-site", ""),
+    )
+    if blocked:
+        status_code, detail = blocked
+        return JSONResponse({"detail": detail}, status_code=status_code)
+
+    response = await call_next(request)
+    for header, value in SECURITY_HEADERS.items():
+        response.headers[header] = value
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 class EstimateRequest(BaseModel):
@@ -241,7 +321,7 @@ async def create_job(
     if target_fps is not None and target_fps not in VIDEO_FPS_CHOICES:
         raise HTTPException(400, f"unsupported output FPS {target_fps}")
 
-    dest = UPLOAD_DIR / f"{int(time.time() * 1000)}_{name}"
+    dest = UPLOAD_DIR / f"{uuid.uuid4().hex}_{name}"
     size = 0
     try:
         with dest.open("wb") as out:
@@ -367,7 +447,7 @@ async def make_preview(
     if aspect_mode not in ASPECT_MODES:
         raise HTTPException(400, f"unknown aspect mode {aspect_mode!r}")
 
-    dest = UPLOAD_DIR / f"preview_{int(time.time() * 1000)}_{name}"
+    dest = UPLOAD_DIR / f"preview_{uuid.uuid4().hex}_{name}"
     size = 0
     try:
         with dest.open("wb") as out:

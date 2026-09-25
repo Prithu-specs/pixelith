@@ -145,6 +145,10 @@ def resolve_preset(name: str) -> str:
 # Above this many output pixels a still image is streamed tile-by-tile to disk
 # rather than assembled in RAM.
 LARGE_IMAGE_PIXELS = 80_000_000
+# Resource-exhaustion boundaries. 8K is about 33 MP, so these limits preserve
+# the advertised feature while rejecting malicious or accidental image bombs.
+MAX_SOURCE_PIXELS = 80_000_000
+MAX_OUTPUT_PIXELS = 40_000_000
 
 
 @dataclass

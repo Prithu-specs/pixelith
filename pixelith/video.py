@@ -120,7 +120,6 @@ def _encoder_args(
 ) -> list[str]:
     """Pick a codec. Above 4K we need HEVC; H.264 levels do not cover 8K."""
     big = (width * height) > (3840 * 2160)
-    encoders = _available_encoders()
     if bitrate is None:
         # CRF is an encoder quality target, not a bitrate or a size promise.
         # Software encoding gives consistent controls across supported OSes.
@@ -128,6 +127,7 @@ def _encoder_args(
             return ["-c:v", "libx265", "-preset", "fast", "-crf", "18",
                     "-tag:v", "hvc1"]
         return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18"]
+    encoders = _available_encoders()
     rate = [
         "-b:v", str(bitrate),
         "-maxrate", str(int(bitrate * 1.25)),

@@ -22,11 +22,12 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from . import compat  # registers the HEIF opener as a side effect
 from . import licensing, watermark
 from .compression import expansion_ratio, output_budget, save_image
-from .config import (ASPECT_MODES, ASPECT_RATIOS, LARGE_IMAGE_PIXELS, MODELS,
-                     PRESETS, UpscaleSettings, resolve_preset)
+from .config import (ASPECT_MODES, ASPECT_RATIOS, LARGE_IMAGE_PIXELS,
+                     MAX_OUTPUT_PIXELS, MAX_SOURCE_PIXELS, MODELS, PRESETS,
+                     UpscaleSettings, resolve_preset)
 from .engine import Engine
 
-Image.MAX_IMAGE_PIXELS = None  # we do our own size guarding
+Image.MAX_IMAGE_PIXELS = MAX_SOURCE_PIXELS
 
 MAX_PASSES = 2  # 4x per pass; 16x is already an extreme ask
 
@@ -90,6 +91,11 @@ def plan(
     """Work out the output size and how many network passes get us there."""
     if src_w <= 0 or src_h <= 0:
         raise ValueError("source dimensions must be positive")
+    if src_w * src_h > MAX_SOURCE_PIXELS:
+        raise ValueError(
+            f"source is {src_w}x{src_h}; the safety limit is "
+            f"{MAX_SOURCE_PIXELS / 1e6:.0f} megapixels"
+        )
     if aspect_ratio not in ASPECT_RATIOS:
         raise ValueError(f"unknown aspect ratio {aspect_ratio!r}")
     if aspect_mode not in ASPECT_MODES:
@@ -116,6 +122,11 @@ def plan(
         out_w, out_h = src_w * model_scale, src_h * model_scale
 
     out_w, out_h = max(1, out_w), max(1, out_h)
+    if out_w * out_h > MAX_OUTPUT_PIXELS:
+        raise ValueError(
+            f"requested output is {out_w}x{out_h}; the safety limit is "
+            f"{MAX_OUTPUT_PIXELS / 1e6:.0f} megapixels"
+        )
     if aspect_mode == "fit" and aspect_ratio != "source":
         needed = min(out_w / src_w, out_h / src_h)
     else:
@@ -221,6 +232,11 @@ def human_time(seconds: float) -> str:
 def _load_rgb(path: Path) -> tuple[np.ndarray, np.ndarray | None, str]:
     """Return (RGB uint8, alpha or None, original mode)."""
     with Image.open(path) as im:
+        if im.width * im.height > MAX_SOURCE_PIXELS:
+            raise ValueError(
+                f"source image exceeds the {MAX_SOURCE_PIXELS / 1e6:.0f} "
+                "megapixel safety limit"
+            )
         im = ImageOps.exif_transpose(im)  # honour camera rotation
         mode = im.mode
         alpha = None

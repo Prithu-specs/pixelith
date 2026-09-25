@@ -41,7 +41,15 @@ jobs:
           pip install -r requirements.txt
 
       - name: Install test tooling
-        run: pip install pytest ruff
+        run: pip install pytest ruff pip-audit bandit
+
+      - name: Audit dependencies for known vulnerabilities
+        if: matrix.python-version == '3.12'
+        run: pip-audit -r requirements.txt
+
+      - name: Reject high-severity static security findings
+        if: matrix.python-version == '3.12'
+        run: bandit -q -r pixelith -lll
 
       - name: Lint (advisory)
         continue-on-error: true
