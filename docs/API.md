@@ -5,7 +5,7 @@ static (no build step). All endpoints below are under `/api`.
 
 ## GET /api/health
 ```json
-{"status":"ok","version":"0.41b3","providers":["CPUExecutionProvider"],
+{"status":"ok","version":"1.00b1","providers":["CPUExecutionProvider"],
  "ffmpeg":true,"active":{"fast":"CoreMLExecutionProvider","quality":"CoreMLExecutionProvider"},
  "max_upload_bytes":8589934592}
 ```
@@ -51,19 +51,23 @@ Response:
 {"output_width":1280,"output_height":720,"passes":1,"seconds":6800,
  "human":"about 1 hour 53 minutes","size_budget_bytes":750000000,
  "max_size_ratio":3.0,"target_video_bitrate":8420000,
+ "source_fps":30,"output_fps":30,"ai_frames":1800,"output_frames":1800,
  "compression_policy":"adaptive_bitrate",
- "warning":"Long job. Consider 4K or the fast model."}
+ "warning":"This is a long AI job. Use Quick resize for a much faster full-movie conversion."}
 ```
 `warning` is `null` when there is nothing to flag.
 
 ## POST /api/jobs   (multipart/form-data)
 Fields: `file` (required), `model` (`fast`|`quality`), `preset` (`180p`…`8k`, optional),
 `scale` (float, optional — used when `preset` is absent), `denoise` (0–1),
-`sharpen` (0–1), `aspect_ratio`, `aspect_mode`, `target_fps`, and `format`
+`sharpen` (0–1), `aspect_ratio`, `aspect_mode`, `target_fps`,
+`video_processing` (`ai`|`native`), `video_encoding` (`bounded`|`quality`),
+and `format`
 (`png`|`jpg`|`webp` for images; `mp4`|`mov` for video).
 
-Every finished output is limited to three times its source-file size and to an
-absolute maximum of 1,000,000,000 bytes. Completed job reports include
+`bounded` output is limited to three times its source-file size and to an
+absolute maximum of 1,000,000,000 bytes. `quality` uses CRF 18 and has no size
+guarantee. Completed job reports include
 `source_bytes`, `output_bytes`, `size_ratio`, and `size_budget_bytes`.
 
 Response `201`: the full job object.
@@ -73,7 +77,7 @@ Runs **one frame** through the real pipeline at the given settings, so a
 multi-hour job can be judged before it starts. Synchronous; it does not queue.
 
 Fields: `file` (required), `model`, `preset`, `scale`, `denoise`, `sharpen`,
-`aspect_ratio`, `aspect_mode`.
+`aspect_ratio`, `aspect_mode`, and `video_processing`.
 
 ```json
 {"id":"1287e1c8fe36","kind":"video",

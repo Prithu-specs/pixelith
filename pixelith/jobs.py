@@ -22,7 +22,7 @@ from .compat import image_suffixes
 from .config import OUTPUT_DIR, WORK_DIR, UpscaleSettings
 from .models import is_available
 from .engine import Cancelled, Engine
-from .pipeline import estimate_seconds, plan, upscale_image
+from .pipeline import estimate_seconds, limit_video_ai_passes, plan, upscale_image
 from .video import VideoError, have_ffmpeg, probe, upscale_video
 
 log = logging.getLogger("pixelith.jobs")
@@ -80,7 +80,8 @@ class Job:
             "finished_at": self.finished_at,
             "source": self.source,
             "target": self.target,
-            "model": self.settings.model,
+            "model": ("Quick resize (no AI)" if self.kind == "video" and
+                      self.settings.video_processing == "native" else self.settings.model),
             "eta_seconds": (
                 round(self.eta_seconds, 1) if self.eta_seconds is not None else None
             ),
@@ -237,9 +238,14 @@ class JobManager:
             w, h = info.width, info.height
             job.source = {"width": w, "height": h, "frames": info.frames,
                           "fps": info.fps, "duration": info.duration}
-            frames = (
+            output_frames = (
                 max(1, round(info.duration * job.settings.target_fps))
                 if job.settings.target_fps and info.duration > 0
+                else max(1, info.frames)
+            )
+            frames = (
+                output_frames
+                if job.settings.target_fps and job.settings.target_fps < info.fps
                 else max(1, info.frames)
             )
             ext = (out_format or "mp4").lower()
@@ -255,12 +261,16 @@ class JobManager:
             job.settings.aspect_ratio,
             job.settings.aspect_mode,
         )
+        if job.kind == "video" and job.settings.video_processing == "ai":
+            p = limit_video_ai_passes(p)
         job.target = {
             "width": p.out_width,
             "height": p.out_height,
             "fps": job.settings.target_fps if job.kind == "video" else None,
         }
         job.eta_seconds = estimate_seconds(w, h, p, spec.key, frames=frames)
+        if job.kind == "video" and job.settings.video_processing == "native":
+            job.eta_seconds = None
 
         stem = Path(job.filename).stem or "upscaled"
         safe = "".join(c for c in stem if c.isalnum() or c in "-_ ").strip() or "upscaled"
@@ -329,7 +339,8 @@ class JobManager:
         self._update(job, stage="preparing", message="loading model", progress=0.0)
 
         spec = job.settings.resolved_model()
-        if not is_available(spec):
+        native = job.kind == "video" and job.settings.video_processing == "native"
+        if not native and not is_available(spec):
             self._update(
                 job, stage="downloading_model", progress=0.0,
                 message=f"downloading {spec.label} ({spec.size_mb:.1f} MB)",
@@ -340,7 +351,7 @@ class JobManager:
             # through a 64 MB fetch.
             self._update(job, stage="downloading_model", progress=frac, message=msg)
 
-        engine = self._engine_for(job.settings, on_download)
+        engine = None if native else self._engine_for(job.settings, on_download)
         job.status = "running"
         started = time.time()
 

@@ -28,7 +28,7 @@ from .compression import (AUDIO_BITRATE, OutputTooLarge, expansion_ratio,
                           output_budget, video_bitrate)
 from .config import VIDEO_FPS_CHOICES, UpscaleSettings
 from .engine import Cancelled, Engine
-from .pipeline import Plan, fit_to_canvas, plan
+from .pipeline import Plan, fit_to_canvas, limit_video_ai_passes, plan
 
 SEGMENT_FRAMES = 240  # ~8 s at 30 fps
 
@@ -115,12 +115,19 @@ def _available_encoders() -> str:
 def _encoder_args(
     width: int,
     height: int,
-    bitrate: int,
+    bitrate: int | None,
     prefer_hw: bool = True,
 ) -> list[str]:
     """Pick a codec. Above 4K we need HEVC; H.264 levels do not cover 8K."""
     big = (width * height) > (3840 * 2160)
     encoders = _available_encoders()
+    if bitrate is None:
+        # CRF is an encoder quality target, not a bitrate or a size promise.
+        # Software encoding gives consistent controls across supported OSes.
+        if big:
+            return ["-c:v", "libx265", "-preset", "fast", "-crf", "18",
+                    "-tag:v", "hvc1"]
+        return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18"]
     rate = [
         "-b:v", str(bitrate),
         "-maxrate", str(int(bitrate * 1.25)),
@@ -164,9 +171,9 @@ def _open_decoder(
     src: Path, info: VideoInfo, target_fps: float | None = None
 ) -> subprocess.Popen:
     args = ["ffmpeg", "-v", "error", "-i", str(src)]
-    if target_fps is not None and abs(target_fps - info.fps) > 0.001:
-        # FFmpeg's fps filter preserves duration: it drops frames when reducing
-        # FPS and duplicates the nearest frame when increasing it.
+    if target_fps is not None and target_fps < info.fps - 0.001:
+        # Dropping frames before inference saves work. Never duplicate here:
+        # higher output rates are produced by the encoder after AI processing.
         args += ["-vf", f"fps={target_fps}"]
     args += ["-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     return subprocess.Popen(
@@ -176,8 +183,29 @@ def _open_decoder(
     )
 
 
+def _frame_rates(info: VideoInfo, target_fps: float | None) -> tuple[float, float, int, int]:
+    """Return processing FPS, output FPS, AI-frame count and output-frame count.
+
+    Increasing FPS only duplicates frames, so it belongs after expensive AI
+    inference. Reducing FPS belongs before inference because dropped frames do
+    not need to be processed.
+    """
+    output_fps = float(target_fps or info.fps)
+    processing_fps = min(info.fps, output_fps)
+    if info.duration > 0:
+        processing_frames = max(1, round(info.duration * processing_fps))
+        output_frames = max(1, round(info.duration * output_fps))
+    else:
+        processing_frames = max(1, info.frames)
+        output_frames = max(
+            1, round(processing_frames * output_fps / info.fps)
+        )
+    return processing_fps, output_fps, processing_frames, output_frames
+
+
 def _open_encoder(
-    dest: Path, w: int, h: int, fps: float, bitrate: int
+    dest: Path, w: int, h: int, fps: float, bitrate: int | None,
+    output_fps: float | None = None,
 ) -> subprocess.Popen:
     encoder_args = _encoder_args(w, h, bitrate)
     if any("videotoolbox" in arg for arg in encoder_args):
@@ -189,9 +217,10 @@ def _open_encoder(
             encoder_args = _encoder_args(w, h, bitrate, prefer_hw=False)
     args = ["ffmpeg", "-v", "error", "-y",
             "-f", "rawvideo", "-pix_fmt", "rgb24",
-            "-s", f"{w}x{h}", "-r", f"{fps}", "-i", "-",
-            "-an", "-pix_fmt", "yuv420p",
-            *encoder_args, str(dest)]
+            "-s", f"{w}x{h}", "-r", f"{fps}", "-i", "-"]
+    if output_fps is not None and abs(output_fps - fps) > 0.001:
+        args += ["-vf", f"fps={output_fps}"]
+    args += ["-an", "-pix_fmt", "yuv420p", *encoder_args, str(dest)]
     return subprocess.Popen(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
@@ -213,6 +242,13 @@ def upscale_video(
     # Video counts against the allowance by input file size, checked up front.
     licensing.check_allowance("video", video_bytes=src.stat().st_size)
 
+    if settings.video_processing not in ("ai", "native"):
+        raise VideoError("choose ai or native video processing")
+    if settings.video_encoding not in ("bounded", "quality"):
+        raise VideoError("choose bounded or quality video encoding")
+    if settings.video_processing == "native":
+        from .video_native import convert
+        return convert(src, dest, settings, work_dir, progress, should_cancel)
     eng = engine or Engine(spec, settings)
     info = probe(src)
     if info.frames <= 0:
@@ -223,11 +259,8 @@ def upscale_video(
             f"choose one of {VIDEO_FPS_CHOICES}"
         )
 
-    output_fps = float(settings.target_fps or info.fps)
-    output_frames = (
-        max(1, round(info.duration * output_fps))
-        if settings.target_fps and info.duration > 0
-        else max(1, info.frames)
+    processing_fps, output_fps, processing_frames, output_frames = _frame_rates(
+        info, settings.target_fps
     )
 
     p: Plan = plan(
@@ -239,11 +272,14 @@ def upscale_video(
         settings.aspect_ratio,
         settings.aspect_mode,
     )
+    p = limit_video_ai_passes(p)
     out_w, out_h = p.out_width - (p.out_width % 2), p.out_height - (p.out_height % 2)
     source_bytes = src.stat().st_size
-    budget_bytes = output_budget(source_bytes, settings.max_output_multiplier)
+    budget_bytes = (output_budget(source_bytes, settings.max_output_multiplier)
+                    if settings.video_encoding == "bounded" else None)
     try:
-        target_bitrate = video_bitrate(info.duration, budget_bytes, info.has_audio)
+        target_bitrate = (video_bitrate(info.duration, budget_bytes, info.has_audio)
+                          if budget_bytes is not None else None)
     except (ValueError, OutputTooLarge) as exc:
         raise VideoError(str(exc)) from exc
 
@@ -257,7 +293,8 @@ def upscale_video(
     signature = {
         "src": str(src), "size": src.stat().st_size, "mtime": int(src.stat().st_mtime),
         "out": [out_w, out_h], "model": spec.key, "passes": p.passes,
-        "source_fps": info.fps, "fps": output_fps,
+        "source_fps": info.fps, "processing_fps": processing_fps,
+        "fps": output_fps,
         "tile": eng.tile, "overlap": eng.overlap,
         "denoise": round(float(settings.denoise), 4),
         "sharpen": round(float(settings.sharpen), 4),
@@ -280,7 +317,7 @@ def upscale_video(
     while done_segments and not (seg_dir / f"seg_{done_segments - 1:05d}.mp4").exists():
         done_segments -= 1
 
-    total_segments = max(1, -(-output_frames // SEGMENT_FRAMES))
+    total_segments = max(1, -(-processing_frames // SEGMENT_FRAMES))
     start_frame = done_segments * SEGMENT_FRAMES
     frame_bytes = info.width * info.height * 3
 
@@ -289,10 +326,10 @@ def upscale_video(
             progress(max(0.0, min(1.0, frac)), msg, extra or {})
 
     if done_segments:
-        emit(start_frame / output_frames,
+        emit(start_frame / processing_frames,
              f"resuming after {done_segments} finished segment(s)", {})
 
-    dec = _open_decoder(src, info, output_fps)
+    dec = _open_decoder(src, info, processing_fps)
     enc: subprocess.Popen | None = None
     seg_index = done_segments
     frames_in_segment = 0
@@ -319,8 +356,9 @@ def upscale_video(
                     seg_dir / f"seg_{seg_index:05d}.part.mp4",
                     out_w,
                     out_h,
-                    output_fps,
+                    processing_fps,
                     target_bitrate,
+                    output_fps=output_fps,
                 )
                 frames_in_segment = 0
 
@@ -360,13 +398,14 @@ def upscale_video(
             recent = per_frame_times[-20:]
             avg = sum(recent) / len(recent)
             emit(
-                absolute / output_frames,
-                f"frame {absolute} of {output_frames}",
+                absolute / processing_frames,
+                f"AI frame {absolute} of {processing_frames}",
                 {
                     "frames_done": absolute,
-                    "frames_total": output_frames,
+                    "frames_total": processing_frames,
+                    "output_frames": output_frames,
                     "seconds_per_frame": round(avg, 3),
-                    "eta_seconds": round(avg * (output_frames - absolute), 1),
+                    "eta_seconds": round(avg * (processing_frames - absolute), 1),
                 },
             )
 
@@ -405,7 +444,7 @@ def upscale_video(
     _concat(seg_dir, seg_index, src, dest, info.has_audio)
 
     output_bytes = dest.stat().st_size if dest.exists() else 0
-    if output_bytes > budget_bytes:
+    if budget_bytes is not None and output_bytes > budget_bytes:
         dest.unlink(missing_ok=True)
         raise VideoError(
             f"compressed output exceeded its {budget_bytes / 1_000_000:.1f} MB "
@@ -426,6 +465,7 @@ def upscale_video(
         "output_width": out_w, "output_height": out_h,
         "frames": output_frames, "fps": output_fps,
         "source_frames": info.frames, "source_fps": info.fps,
+        "ai_frames": processing_frames, "processing_fps": processing_fps,
         "frames_processed": processed,
         "resumed_from": start_frame,
         "segments": seg_index,

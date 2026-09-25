@@ -401,6 +401,17 @@ select:hover { border-color: var(--text-3); }
 
 /* range */
 .slider-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
+.check-row {
+  display: flex; align-items: center; gap: var(--s-3); cursor: pointer;
+  padding: var(--s-3); margin-bottom: var(--s-3);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg-sunken);
+}
+.check-row input { width: 18px; height: 18px; accent-color: var(--accent); }
+.check-row span { display: grid; gap: 2px; }
+.check-row strong { font-size: var(--fs-sm); }
+.check-row small { color: var(--text-3); font-size: var(--fs-xs); }
+.slider-scale--four { grid-template-columns: repeat(4, 1fr); }
 .slider-value {
   font-size: var(--fs-sm); font-weight: 620; color: var(--accent);
   font-variant-numeric: tabular-nums;

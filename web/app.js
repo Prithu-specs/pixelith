@@ -39,7 +39,7 @@ const API = '/api';
 const STORE_KEY = 'pixelith.settings.v1';
 const POLL_MS = 1500;
 const ASSUMED_FPS = 30;               // API contract: assume 30 when fps is unknown
-const VIDEO_FPS_OPTIONS = [null, 24, 30, 60, 120];
+const VIDEO_FPS_OPTIONS = [24, 30, 60, 120];
 const TERMINAL = new Set(['done', 'error', 'cancelled']);
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif', 'bmp', 'tif', 'tiff'];
@@ -99,7 +99,11 @@ const el = {
   scaleOut:     $('#scale-out'),
   aspectRatio:  $('#aspect-ratio'),
   aspectMode:   $('#aspect-mode'),
+  videoProcessing: $('#video-processing'),
+  videoEncoding: $('#video-encoding'),
   videoFpsWrap: $('#video-fps-wrap'),
+  videoFpsConvert: $('#video-fps-convert'),
+  videoFpsControls: $('#video-fps-controls'),
   videoFps:     $('#video-fps'),
   videoFpsOut:  $('#video-fps-out'),
   denoise:      $('#denoise'),
@@ -361,6 +365,9 @@ function readSettings() {
     scale: parseFloat(el.scale.value),
     aspectRatio: el.aspectRatio.value,
     aspectMode: el.aspectMode.value,
+    videoProcessing: el.videoProcessing.value,
+    videoEncoding: el.videoEncoding.value,
+    convertFps: el.videoFpsConvert.checked,
     videoFps: selectedVideoFps(),
     denoise: parseFloat(el.denoise.value),
     sharpen: parseFloat(el.sharpen.value),
@@ -382,9 +389,11 @@ function applySettings(s) {
   if (Number.isFinite(s.scale)) el.scale.value = clamp(s.scale, 1.5, 8);
   if (s.aspectRatio) el.aspectRatio.value = s.aspectRatio;
   if (s.aspectMode) el.aspectMode.value = s.aspectMode;
-  if (VIDEO_FPS_OPTIONS.includes(s.videoFps)) {
-    el.videoFps.value = String(VIDEO_FPS_OPTIONS.indexOf(s.videoFps));
-  }
+  if (['ai', 'native'].includes(s.videoProcessing)) el.videoProcessing.value = s.videoProcessing;
+  if (['quality', 'bounded'].includes(s.videoEncoding)) el.videoEncoding.value = s.videoEncoding;
+  const hasSavedFps = VIDEO_FPS_OPTIONS.includes(s.videoFps);
+  el.videoFpsConvert.checked = s.convertFps === true || hasSavedFps;
+  if (hasSavedFps) el.videoFps.value = String(VIDEO_FPS_OPTIONS.indexOf(s.videoFps));
   if (Number.isFinite(s.denoise)) el.denoise.value = clamp(s.denoise, 0, 1);
   if (Number.isFinite(s.sharpen)) el.sharpen.value = clamp(s.sharpen, 0, 1);
   if (s.imageFormat) el.imageFormat.value = s.imageFormat;
@@ -392,18 +401,26 @@ function applySettings(s) {
   syncSliderOutputs();
   syncTargetMode();
   syncAspectControls();
+  syncFpsControls();
 }
 
 function syncSliderOutputs() {
   setText(el.scaleOut, `${parseFloat(el.scale.value).toFixed(1)}×`);
   setText(el.denoiseOut, parseFloat(el.denoise.value).toFixed(2));
   setText(el.sharpenOut, parseFloat(el.sharpen.value).toFixed(2));
-  const fps = selectedVideoFps();
-  setText(el.videoFpsOut, fps ? `${fps} FPS` : 'Source');
+  const fps = VIDEO_FPS_OPTIONS[Number(el.videoFps.value)];
+  setText(el.videoFpsOut, `${fps} FPS`);
 }
 
 function selectedVideoFps() {
+  if (!el.videoFpsConvert.checked) return null;
   return VIDEO_FPS_OPTIONS[Number(el.videoFps.value)] ?? null;
+}
+
+function syncFpsControls() {
+  const enabled = el.videoFpsConvert.checked;
+  el.videoFpsControls.hidden = !enabled;
+  el.videoFps.disabled = !enabled;
 }
 
 function syncTargetMode() {
@@ -907,6 +924,8 @@ async function runEstimates() {
       frames: item.source.frames,
       fps: item.source.fps,
       target_fps: item.kind === 'video' ? selectedVideoFps() : null,
+      video_processing: el.videoProcessing.value,
+      video_encoding: el.videoEncoding.value,
       model,
       ...target,
       ...geometryPayload(),
@@ -1077,6 +1096,8 @@ async function submitAll(event) {
     fd.append('sharpen', el.sharpen.value);
     fd.append('aspect_ratio', el.aspectRatio.value);
     fd.append('aspect_mode', el.aspectMode.value);
+    fd.append('video_processing', el.videoProcessing.value);
+    fd.append('video_encoding', el.videoEncoding.value);
     if (item.kind === 'video' && selectedVideoFps()) {
       fd.append('target_fps', String(selectedVideoFps()));
     }
@@ -1675,6 +1696,7 @@ async function runPreview(item) {
   fd.append('sharpen', el.sharpen.value);
   fd.append('aspect_ratio', el.aspectRatio.value);
   fd.append('aspect_mode', el.aspectMode.value);
+  fd.append('video_processing', el.videoProcessing.value);
 
   try {
     const res = await api('/preview', { method: 'POST', body: fd });
@@ -1702,6 +1724,7 @@ async function runPreview(item) {
     } else {
       setText(el.previewTiming, `Took ${res.seconds}s.`);
     }
+    el.previewTiming.textContent += ' ' + (res.preview_scope || '');
     el.previewAccept.disabled = false;
   } catch (err) {
     el.previewCompare.hidden = true;
@@ -1883,6 +1906,11 @@ function wireSettings() {
     input.addEventListener('input', syncSliderOutputs);
     input.addEventListener('change', () => { saveSettings(); scheduleEstimate(); });
   });
+  el.videoFpsConvert.addEventListener('change', () => {
+    syncFpsControls();
+    saveSettings();
+    scheduleEstimate();
+  });
 
   // input fires while dragging so the readout tracks the thumb; change commits.
   el.preset.addEventListener('input', renderPreset);
@@ -1890,7 +1918,7 @@ function wireSettings() {
     renderPreset(); saveSettings(); scheduleEstimate();
   });
   [el.imageFormat, el.videoFormat].forEach((sel) => sel.addEventListener('change', saveSettings));
-  [el.aspectRatio, el.aspectMode].forEach((sel) => {
+  [el.aspectRatio, el.aspectMode, el.videoProcessing, el.videoEncoding].forEach((sel) => {
     sel.addEventListener('change', () => {
       syncAspectControls(); saveSettings(); scheduleEstimate();
     });

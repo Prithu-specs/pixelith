@@ -17,7 +17,8 @@ from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, OUTPUT_DIR, PRESETS,
 from .engine import Cancelled, Engine, available_providers, choose_providers
 from . import licensing, watermark
 from .models import ensure, is_available, status as model_status
-from .pipeline import estimate_seconds, human_time, plan, upscale_image
+from .pipeline import (estimate_seconds, human_time, limit_video_ai_passes,
+                       plan, upscale_image)
 from .video import VideoError, have_ffmpeg, probe, upscale_video
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".heic"}
@@ -309,6 +310,8 @@ def cmd_upscale(args: argparse.Namespace) -> int:
         tile=args.tile, hybrid=not args.single_device,
         aspect_ratio=args.aspect_ratio, aspect_mode=args.aspect_mode,
         target_fps=args.fps,
+        video_processing=args.video_processing,
+        video_encoding=args.video_encoding,
     )
     spec = settings.resolved_model()
     is_video = src.suffix.lower() not in IMAGE_SUFFIXES
@@ -320,9 +323,13 @@ def cmd_upscale(args: argparse.Namespace) -> int:
             return 2
         info = probe(src)
         w, h = info.width, info.height
-        frames = (
+        output_frames = (
             max(1, round(info.duration * args.fps))
             if args.fps and info.duration > 0 else max(1, info.frames)
+        )
+        frames = (
+            output_frames if args.fps and args.fps < info.fps
+            else max(1, info.frames)
         )
     else:
         from PIL import Image, ImageOps
@@ -339,7 +346,13 @@ def cmd_upscale(args: argparse.Namespace) -> int:
         settings.aspect_ratio,
         settings.aspect_mode,
     )
+    if is_video and settings.video_processing == "ai":
+        p = limit_video_ai_passes(p)
     est = estimate_seconds(w, h, p, spec.key, frames=frames)
+    native = is_video and settings.video_processing == "native"
+    if native:
+        est = 0
+        p.passes = 0
 
     if args.output:
         dest = Path(args.output).expanduser()
@@ -352,9 +365,15 @@ def cmd_upscale(args: argparse.Namespace) -> int:
           f"({p.passes} network pass{'es' if p.passes != 1 else ''}, model '{spec.key}')")
     if is_video:
         output_fps = args.fps or info.fps
-        print(f"  {frames} frames at {output_fps} fps"
+        print(f"  {output_frames} output frames at {output_fps} fps"
               f" (source {info.fps} fps)")
-    print(f"  estimated {human_time(est)}")
+        if frames != output_frames:
+            print(f"  AI processes {frames} unique frames; FPS conversion happens after AI")
+    print("  native resize; time measured while encoding" if native
+          else f"  estimated {human_time(est)}")
+    if is_video:
+        print("  encoding: " + ("CRF 18; variable size, no 1 GB cap"
+              if settings.video_encoding == "quality" else "size-limited; long videos may lose detail"))
     print(f"  writing to {dest}")
 
     if est > 900 and not args.yes:
@@ -370,8 +389,8 @@ def cmd_upscale(args: argparse.Namespace) -> int:
         print(f"\n  {exc}", file=sys.stderr)
         return 3
 
-    engine = Engine(spec, settings)
-    print(f"  running on {engine.provider}")
+    engine = None if native else Engine(spec, settings)
+    print(f"  running on {engine.provider if engine else 'FFmpeg'}")
     started = time.time()
     state = {"last": 0.0}
 
@@ -474,6 +493,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="disable automatic CPU/GPU/NPU cooperation",
     )
+    u.add_argument("--video-processing", choices=("ai", "native"), default="ai",
+                   help="native is quick resize without AI; cancelled native jobs restart")
+    u.add_argument("--video-encoding", choices=("bounded", "quality"), default="bounded",
+                   help="quality uses CRF 18 with variable file size and no 1 GB cap")
     u.add_argument("-y", "--yes", action="store_true",
                    help="do not prompt before long jobs")
     u.set_defaults(func=cmd_upscale)

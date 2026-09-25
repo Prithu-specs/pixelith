@@ -163,6 +163,10 @@ class UpscaleSettings:
     aspect_mode: str = "fit"
     target_fps: int | None = None
     max_output_multiplier: float = MAX_OUTPUT_MULTIPLIER
+    # Explicit video tradeoffs: native resize avoids neural inference; quality
+    # encoding has no artificial file-size ceiling. Legacy callers keep limits.
+    video_processing: str = "ai"
+    video_encoding: str = "bounded"
     providers: list[str] = field(default_factory=list)
     # Use heterogeneous hardware automatically. Core ML, NNAPI and OpenVINO
     # coordinate CPU/GPU/NPU inside one runtime. Discrete accelerators may get a

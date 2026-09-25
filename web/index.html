@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Pixelith">
 <title>Pixelith</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=video-speed-3">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235b5bd6'/%3E%3Cpath d='M9 20h6v-6H9zM17 9h6v6h-6z' fill='%23fff'/%3E%3C/svg%3E">
@@ -209,34 +209,60 @@
             <label class="field__label field__label--sub" for="aspect-mode">Framing</label>
             <div class="select-wrap">
               <select id="aspect-mode">
-                <option value="fit">Fit &middot; keep everything</option>
-                <option value="fill">Fill &middot; crop edges</option>
-                <option value="stretch">Stretch &middot; no bars</option>
+                <option value="fit">Keep full picture &middot; may add black bars</option>
+                <option value="fill">Fill screen &middot; crop edges</option>
+                <option value="stretch">Stretch &middot; distorts proportions</option>
               </select>
             </div>
           </div>
         </div>
-        <p class="hint">Fit may add black bars. Finished files are limited to 3&times; the source size and never more than 1 GB.</p>
+        <p class="hint">Widescreen sets the canvas. Choose Fill screen to cover it by cropping, or Keep full picture to preserve everything with bars. Existing bars in a source are not automatically removed. Preview before starting.</p>
+
+        <div class="field grid-2">
+          <div>
+            <label class="field__label field__label--sub" for="video-processing">Video processing</label>
+            <select id="video-processing">
+              <option value="ai">AI enhancement &middot; slower</option>
+              <option value="native">Quick resize &middot; no AI detail recovery</option>
+            </select>
+          </div>
+          <div>
+            <label class="field__label field__label--sub" for="video-encoding">Video encoding</label>
+            <select id="video-encoding">
+              <option value="quality">Preserve quality &middot; larger files</option>
+              <option value="bounded">Limit size &middot; 3&times; source / 1 GB</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Quick resize avoids the AI model and measures speed while encoding; cancelled jobs restart. Preserve quality has no 1 GB cap. Limit size can visibly degrade long HD videos. These two options apply to video only.</p>
 
         <div class="field" id="video-fps-wrap">
-          <div class="slider-head">
-            <label class="field__label field__label--sub" for="video-fps">Video frame rate</label>
-            <output class="slider-value" id="video-fps-out" for="video-fps">Source</output>
+          <label class="check-row" for="video-fps-convert">
+            <input type="checkbox" id="video-fps-convert">
+            <span>
+              <strong>Change frame rate</strong>
+              <small>Off by default — keeps the source video unchanged</small>
+            </span>
+          </label>
+          <div id="video-fps-controls" hidden>
+            <div class="slider-head">
+              <label class="field__label field__label--sub" for="video-fps">Output frame rate</label>
+              <output class="slider-value" id="video-fps-out" for="video-fps">30 FPS</output>
+            </div>
+            <input type="range" id="video-fps" name="video-fps" min="0" max="3"
+                   step="1" value="1" list="video-fps-ticks"
+                   aria-describedby="video-fps-hint" disabled>
+            <datalist id="video-fps-ticks">
+              <option value="0" label="24"></option>
+              <option value="1" label="30"></option>
+              <option value="2" label="60"></option>
+              <option value="3" label="120"></option>
+            </datalist>
+            <div class="slider-scale slider-scale--four" aria-hidden="true">
+              <span>24</span><span>30</span><span>60</span><span>120 FPS</span>
+            </div>
           </div>
-          <input type="range" id="video-fps" name="video-fps" min="0" max="4"
-                 step="1" value="0" list="video-fps-ticks"
-                 aria-describedby="video-fps-hint">
-          <datalist id="video-fps-ticks">
-            <option value="0" label="Source"></option>
-            <option value="1" label="24"></option>
-            <option value="2" label="30"></option>
-            <option value="3" label="60"></option>
-            <option value="4" label="120"></option>
-          </datalist>
-          <div class="slider-scale slider-scale--five" aria-hidden="true">
-            <span>Source</span><span>24</span><span>30</span><span>60</span><span>120 FPS</span>
-          </div>
-          <p id="video-fps-hint" class="hint">Higher rates duplicate frames to preserve duration; they do not invent new motion and can increase processing time.</p>
+          <p id="video-fps-hint" class="hint">Source is the default: 24 stays 24, 30 stays 30, 60 stays 60, and 120 stays 120. Choose another rate only when you explicitly need conversion.</p>
         </div>
 
         <div class="field grid-2">
@@ -465,6 +491,6 @@
   </li>
 </template>
 
-<script src="app.js"></script>
+<script src="app.js?v=video-speed-3"></script>
 </body>
 </html>

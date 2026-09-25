@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
@@ -54,6 +54,18 @@ class Plan:
             "aspect_ratio": self.aspect_ratio,
             "aspect_mode": self.aspect_mode,
         }
+
+
+def limit_video_ai_passes(p: Plan) -> Plan:
+    """Keep video inference to one 4x pass, then resample to the target canvas.
+
+    A second network pass processes sixteen times as many input pixels as the
+    first.  That can be useful for a still image, but makes long 4K/8K video
+    impractical and usually spends compute inventing detail beyond the source.
+    """
+    if p.passes <= 1:
+        return p
+    return replace(p, passes=1, downsample=p.effective_scale < 4)
 
 
 def _aspect_dimensions(width: int, height: int, aspect_ratio: str) -> tuple[int, int]:

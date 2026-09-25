@@ -23,7 +23,7 @@ import numpy as np
 
 from .config import WORK_DIR, UpscaleSettings
 from .engine import Engine
-from .pipeline import _postprocess, fit_to_canvas, plan
+from .pipeline import _postprocess, fit_to_canvas, limit_video_ai_passes, plan
 from .video import VideoError, probe
 
 PREVIEW_DIR = WORK_DIR / "previews"
@@ -109,7 +109,8 @@ def run(
     from PIL import Image, ImageOps
 
     spec = settings.resolved_model()
-    eng = engine or Engine(spec, settings)
+    native = kind == "video" and settings.video_processing == "native"
+    eng = None if native else (engine or Engine(spec, settings))
 
     if kind == "video":
         rgb, used_index = extract_frame(src, frame_index)
@@ -128,17 +129,31 @@ def run(
         settings.aspect_ratio,
         settings.aspect_mode,
     )
+    if kind == "video" and not native:
+        p = limit_video_ai_passes(p)
 
     started = time.perf_counter()
     current = rgb
-    for _ in range(p.passes):
+    for _ in range(0 if native else p.passes):
         current = eng.upscale(current)
     out = Image.fromarray(current)
-    if (out.width, out.height) != (p.out_width, p.out_height):
+    if native:
+        from .video_native import filters
+        w, h = max(2, p.out_width // 2 * 2), max(2, p.out_height // 2 * 2)
+        proc = subprocess.run([
+            "ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
+            "-s", f"{rgb.shape[1]}x{rgb.shape[0]}", "-i", "pipe:0", "-vf",
+            filters(w, h, settings), "-frames:v", "1", "-f", "rawvideo",
+            "-pix_fmt", "rgb24", "pipe:1",
+        ], input=rgb.tobytes(), capture_output=True, check=True)
+        out = Image.fromarray(np.frombuffer(proc.stdout, dtype=np.uint8).reshape(h, w, 3))
+        p.out_width, p.out_height = w, h
+    elif (out.width, out.height) != (p.out_width, p.out_height):
         out = fit_to_canvas(
             out, (p.out_width, p.out_height), settings.aspect_mode
         )
-    out = _postprocess(out, settings)
+    if not native:
+        out = _postprocess(out, settings)
     elapsed = time.perf_counter() - started
 
     pid = uuid.uuid4().hex[:12]

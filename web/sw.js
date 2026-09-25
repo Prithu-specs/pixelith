@@ -1,5 +1,6 @@
-const CACHE = 'pixelith-shell-v0.41b3';
-const SHELL = ['/', '/index.html', '/style.css', '/app.js', '/icon.svg', '/manifest.webmanifest'];
+const CACHE = 'pixelith-shell-v1.00b1-video-speed-1';
+const SHELL = ['/', '/index.html', '/style.css?v=video-speed-3',
+  '/app.js?v=video-speed-3', '/icon.svg', '/manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
   self.skipWaiting();

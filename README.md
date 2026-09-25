@@ -1,5 +1,37 @@
 # Pixelith
 
+### Video quality and speed update (local patch, 9 September 2026)
+
+The web interface now offers **Preserve quality** video encoding by default.
+It uses H.264 CRF 18 (HEVC above 4K) and can produce files larger than 1 GB.
+Choose **Limit size** explicitly to retain the old 3× source / 1 GB ceiling;
+that limit can cause severe compression on long HD videos. CLI and API
+defaults remain size-limited for compatibility.
+
+**Quick resize** streams decoding, Lanczos resizing and encoding through
+FFmpeg, without a neural model. Choose it when turnaround matters more than
+AI detail recovery. **AI enhancement** remains available and is much slower.
+Quick resize reports its speed during conversion; cancelled jobs restart.
+The model selector applies to AI processing, not Quick resize.
+
+Widescreen defines the canvas. **Keep full picture** preserves composition
+with black bars; **Fill screen** crops edges to cover the canvas; **Stretch**
+distorts proportions. Bars already baked into an input are not removed
+automatically. Use the original source, not a previously letterboxed export.
+Keep the source FPS unless delivery requires a different rate. Increasing FPS
+duplicates frames; it is not motion interpolation.
+
+CLI example (equivalent API form fields: `video_processing`, `video_encoding`):
+
+```sh
+python -m pixelith upscale input.mp4 --preset 1080p --aspect-ratio 16:9 --aspect-mode fill --video-processing native --video-encoding quality
+```
+
+The still-frame preview shows framing and processing; it does not predict
+compression artifacts or motion in the finished video. Inspect a short export
+before a long conversion. Earlier size-limit descriptions below apply to
+Limit size mode; they are not a guarantee for Preserve quality mode.
+
 **Upscale images and video up to 8K on your own machine — no account, no API key, nothing uploaded.**
 
 Pixelith is a local AI upscaler. You point it at a photo or a video, pick how
@@ -19,11 +51,11 @@ honest set of numbers about how long things take.
 ![Inference: 100% local](https://img.shields.io/badge/inference-100%25%20local-2E7D32)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-455A64)
 [![GitHub stars](https://img.shields.io/github/stars/Prithu-specs/pixelith)](https://github.com/Prithu-specs/pixelith/stargazers)
-[![Current beta](https://img.shields.io/badge/beta-v0.41b3-6f42c1)](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b3)
+[![Current beta](https://img.shields.io/badge/beta-v1.00b1-6f42c1)](https://github.com/Prithu-specs/pixelith/releases/tag/v1.00-beta.1)
 [![Release downloads](https://img.shields.io/github/downloads/Prithu-specs/pixelith/total)](https://github.com/Prithu-specs/pixelith/releases)
 [![CI](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml/badge.svg)](https://github.com/Prithu-specs/pixelith/actions/workflows/ci.yml)
 
-**[Download the current beta](https://github.com/Prithu-specs/pixelith/releases/tag/v0.41b3)** ·
+**[Download the current beta](https://github.com/Prithu-specs/pixelith/releases/tag/v1.00-beta.1)** ·
 **[Share a beta trial report](https://github.com/Prithu-specs/pixelith/issues/new?template=beta_trial.yml)** ·
 **[Join the discussion](https://github.com/Prithu-specs/pixelith/discussions)**
 

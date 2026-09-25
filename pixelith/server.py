@@ -29,7 +29,7 @@ from . import licensing, preview as preview_mod
 from .compat import resource_root, summary as platform_summary
 from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
 from .models import status as model_status
-from .pipeline import estimate_seconds, human_time, plan
+from .pipeline import estimate_seconds, human_time, limit_video_ai_passes, plan
 from .video import have_ffmpeg
 
 log = logging.getLogger("pixelith.server")
@@ -58,6 +58,8 @@ class EstimateRequest(BaseModel):
     aspect_ratio: str = "source"
     aspect_mode: str = "fit"
     source_bytes: int | None = Field(default=None, gt=0)
+    video_processing: str = "ai"
+    video_encoding: str = "bounded"
 
 
 @app.get("/api/health")
@@ -97,6 +99,8 @@ def presets() -> dict:
 
 @app.post("/api/estimate")
 def estimate(req: EstimateRequest) -> dict:
+    if req.video_processing not in ("ai", "native") or req.video_encoding not in ("bounded", "quality"):
+        raise HTTPException(400, "unsupported video processing or encoding mode")
     if req.model not in MODELS:
         raise HTTPException(400, f"unknown model {req.model!r}")
     spec = MODELS[req.model]
@@ -115,15 +119,20 @@ def estimate(req: EstimateRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    frames = max(1, req.frames or 1) if req.kind == "video" else 1
+    output_frames = max(1, req.frames or 1) if req.kind == "video" else 1
+    ai_frames = output_frames
     if (
         req.kind == "video"
         and req.target_fps
         and req.fps
         and req.fps > 0
     ):
-        frames = max(1, round(frames * req.target_fps / req.fps))
-    seconds = estimate_seconds(req.width, req.height, p, spec.key, frames=frames)
+        output_frames = max(1, round(output_frames * req.target_fps / req.fps))
+        if req.target_fps < req.fps:
+            ai_frames = output_frames
+    if req.kind == "video" and req.video_processing == "ai":
+        p = limit_video_ai_passes(p)
+    seconds = estimate_seconds(req.width, req.height, p, spec.key, frames=ai_frames)
 
     warning = None
     if p.passes == 0:
@@ -133,8 +142,9 @@ def estimate(req: EstimateRequest) -> dict:
         )
     elif seconds > 3600:
         warning = (
-            f"This is a long job ({human_time(seconds)}). Consider the 4K preset "
-            "or the fast model. You can close the page; the job keeps running."
+            f"This is a long AI job ({human_time(seconds)}). Use Quick resize "
+            "for a much faster full-movie conversion, or lower the resolution. "
+            "You can close the page; the job keeps running."
         )
     elif seconds > 600:
         warning = f"This will take a while ({human_time(seconds)})."
@@ -155,13 +165,29 @@ def estimate(req: EstimateRequest) -> dict:
         except (ValueError, OutputTooLarge):
             target_video_bitrate = None
 
+    native = req.kind == "video" and req.video_processing == "native"
+    warnings = [warning] if warning and not native else []
+    if req.kind == "video" and req.video_encoding == "quality":
+        budget_bytes = None
+        target_video_bitrate = None
+        warnings.append("Preserve quality uses CRF 18; file size is variable and can exceed 1 GB.")
+    elif target_video_bitrate and target_video_bitrate < p.out_width * p.out_height * (req.target_fps or req.fps or 30) * 0.06:
+        warnings.append("The size limit gives very little bitrate for this resolution and frame rate. Visible compression is likely; choose Preserve quality.")
+    if req.aspect_ratio != "source":
+        warnings.append({"fit": "Fit keeps the whole picture and adds black bars when the shapes differ.",
+                         "fill": "Fill covers the canvas by cropping edges; check the framing preview.",
+                         "stretch": "Stretch fills the canvas by distorting proportions."}[req.aspect_mode])
+    if req.kind == "video" and req.target_fps and req.fps and abs(req.target_fps - req.fps) > .01:
+        warnings.append("FPS conversion drops or duplicates frames; it does not create smoother motion. Keep Source unless a different rate is required.")
+    if native:
+        warnings.append("Quick resize uses Lanczos, not an AI model. It cannot reconstruct missing detail. Cancelled jobs restart from the beginning.")
     return {
         "output_width": p.out_width,
         "output_height": p.out_height,
-        "passes": p.passes,
-        "seconds": round(seconds, 1),
-        "human": human_time(seconds),
-        "warning": warning,
+        "passes": 0 if native else p.passes,
+        "seconds": None if native else round(seconds, 1),
+        "human": "Time measured while encoding" if native else human_time(seconds),
+        "warning": " ".join(warnings) or None,
         "size_budget_bytes": budget_bytes,
         "max_size_ratio": (
             round(budget_bytes / req.source_bytes, 2)
@@ -172,9 +198,11 @@ def estimate(req: EstimateRequest) -> dict:
         "output_fps": (
             req.target_fps or req.fps if req.kind == "video" else None
         ),
-        "output_frames": frames if req.kind == "video" else None,
+        "ai_frames": ai_frames if req.kind == "video" else None,
+        "output_frames": output_frames if req.kind == "video" else None,
         "compression_policy": (
-            "adaptive_bitrate" if req.kind == "video" else "adaptive_quality"
+            ("constant_quality" if req.video_encoding == "quality" else "adaptive_bitrate")
+            if req.kind == "video" else "adaptive_quality"
         ),
     }
 
@@ -191,8 +219,12 @@ async def create_job(
     aspect_ratio: str = Form("source"),
     aspect_mode: str = Form("fit"),
     target_fps: int | None = Form(None),
+    video_processing: str = Form("ai"),
+    video_encoding: str = Form("bounded"),
     format: str | None = Form(None),
 ) -> JSONResponse:
+    if video_processing not in ("ai", "native") or video_encoding not in ("bounded", "quality"):
+        raise HTTPException(400, "unsupported video processing or encoding mode")
     name = Path(file.filename or "upload").name
     try:
         classify(name)
@@ -263,6 +295,8 @@ async def create_job(
         aspect_ratio=aspect_ratio,
         aspect_mode=aspect_mode,
         target_fps=target_fps if kind == "video" else None,
+        video_processing=video_processing,
+        video_encoding=video_encoding,
     )
     try:
         job = MANAGER.submit(dest, name, settings, out_format=format)
@@ -316,8 +350,11 @@ async def make_preview(
     sharpen: float = Form(0.0),
     aspect_ratio: str = Form("source"),
     aspect_mode: str = Form("fit"),
+    video_processing: str = Form("ai"),
 ) -> dict:
     """Upscale one frame at the chosen settings, before committing to the job."""
+    if video_processing not in ("ai", "native"):
+        raise HTTPException(400, "unsupported video processing mode")
     name = Path(file.filename or "upload").name
     try:
         kind = classify(name)
@@ -353,6 +390,7 @@ async def make_preview(
         sharpen=max(0.0, min(1.0, sharpen)),
         aspect_ratio=aspect_ratio,
         aspect_mode=aspect_mode,
+        video_processing=video_processing,
     )
     try:
         result = preview_mod.run(dest, kind, settings)
@@ -363,10 +401,11 @@ async def make_preview(
         dest.unlink(missing_ok=True)
 
     data = result.as_dict()
-    if kind == "video":
+    if kind == "video" and video_processing == "ai":
         # The preview time is the real per-frame cost, so the estimate for the
         # whole job stops being a projection.
         data["measured_per_frame"] = round(result.seconds, 2)
+    data["preview_scope"] = "Framing and processing preview only; final video compression and motion are not shown."
     return data
 
 
