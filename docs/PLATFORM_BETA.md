@@ -29,8 +29,10 @@ The mobile beta is an installable companion for the desktop engine:
 1. Open Pixelith on a computer with LAN access enabled (`pixelith serve --lan`
    when using the command-line build).
 2. Put the phone and computer on the same trusted Wi-Fi.
-3. Open the printed local address in Chrome on Android or Safari on iPhone/iPad.
-4. Choose **Install app** / **Add to Home Screen** from the browser menu where
+3. Select the automatically discovered Pixelith desktop, or open the printed
+   local address in Chrome on Android or Safari on iPhone/iPad.
+4. Enter the temporary six-digit code shown on the desktop.
+5. Choose **Install app** / **Add to Home Screen** from the browser menu where
    available.
 
 The phone selects and uploads a file directly to your computer over local Wi-Fi.
@@ -42,6 +44,7 @@ on-device Android/iOS inference is tracked separately because it needs ORT
 Mobile, model and memory validation, heat/battery testing, and signed store
 builds. iPhones run iOS; they are not Linux devices.
 
-Use LAN mode only on a trusted network. Pixelith intentionally has no sign-in or
-password, so another person on the same network who knows the address could open
-the interface.
+Use LAN mode only on a trusted network. Pixelith has no account or permanent
+password: a five-minute one-time code creates a cryptographically random,
+12-hour local session. Codes are rate limited and sessions are revoked when the
+desktop exits. See [the store-readiness security and test gate](STORE_READINESS.md).

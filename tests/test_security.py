@@ -1,8 +1,11 @@
 """Security boundaries for the local HTTP application."""
 import pytest
+from starlette.requests import Request
 
 from pixelith.pipeline import plan
-from pixelith.server import SECURITY_HEADERS, _request_block_reason
+from pixelith.pairing import PAIRING
+from pixelith.server import (MOBILE_UPLOAD_BYTES, PREVIEW_UPLOAD_BYTES,
+                             SECURITY_HEADERS, _request_block_reason, health)
 
 
 def test_security_headers_are_present():
@@ -58,3 +61,25 @@ def test_untrusted_hosts_are_blocked(host):
 def test_oversized_pixel_canvas_is_rejected():
     with pytest.raises(ValueError, match="safety limit"):
         plan(20_000, 20_000, preset="8k")
+
+
+def test_mobile_upload_and_preview_limits_are_bounded():
+    assert 256 * 1024**2 <= MOBILE_UPLOAD_BYTES <= 2 * 1024**3
+    assert PREVIEW_UPLOAD_BYTES <= MOBILE_UPLOAD_BYTES
+
+
+def test_unpaired_lan_health_does_not_disclose_hardware_or_licence():
+    request = Request({
+        "type": "http", "method": "GET", "path": "/api/health",
+        "headers": [(b"host", b"192.168.1.10:8420")],
+        "scheme": "http", "client": ("192.168.1.20", 50000),
+        "server": ("192.168.1.10", 8420), "query_string": b"",
+    })
+    PAIRING.enable()
+    try:
+        body = health(request)
+        assert body["status"] == "pairing_required"
+        assert "hardware" not in body
+        assert "license" not in body
+    finally:
+        PAIRING.disable()

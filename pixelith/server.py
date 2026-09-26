@@ -11,6 +11,7 @@ import json
 import logging
 import shutil
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -32,15 +33,28 @@ from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
 from .models import status as model_status
 from .pipeline import estimate_seconds, human_time, limit_video_ai_passes, plan
 from .video import have_ffmpeg
+from .pairing import PAIRING, PairingError
+from .compat import total_ram_bytes
 
 log = logging.getLogger("pixelith.server")
 
 MAX_UPLOAD_BYTES = 8 * 1024**3          # 8 GiB
+MOBILE_UPLOAD_BYTES = min(2 * 1024**3, max(256 * 1024**2, total_ram_bytes() // 4))
+PREVIEW_UPLOAD_BYTES = 512 * 1024**2
+DISK_RESERVE_BYTES = 512 * 1024**2
 UPLOAD_DIR = WORK_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 WEB_DIR = resource_root() / "web"
 
-app = FastAPI(title="Pixelith", version=__version__)
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    yield
+    MANAGER.shutdown()
+    PAIRING.disable()
+
+
+app = FastAPI(title="Pixelith", version=__version__, lifespan=_lifespan)
 
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
@@ -104,6 +118,36 @@ def _request_block_reason(
     return None
 
 
+def _loopback_client(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # Starlette's in-process TestClient uses a non-IP sentinel.
+        return host in {"testclient", "localhost", ""}
+
+
+def _session_token(request: Request) -> str | None:
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("pixelith "):
+        return auth.split(" ", 1)[1].strip()
+    return request.cookies.get("pixelith_session")
+
+
+def _upload_limit(request: Request, *, preview: bool = False) -> int:
+    """Bound uploads by device class and currently available desktop storage."""
+    if preview:
+        configured = PREVIEW_UPLOAD_BYTES
+    else:
+        mobile = request.headers.get("x-pixelith-mobile") == "1"
+        configured = MOBILE_UPLOAD_BYTES if mobile else MAX_UPLOAD_BYTES
+    try:
+        free = shutil.disk_usage(UPLOAD_DIR).free
+        return max(0, min(configured, free - DISK_RESERVE_BYTES))
+    except OSError:
+        return configured
+
+
 @app.middleware("http")
 async def local_security_boundary(request: Request, call_next):
     """Block DNS rebinding and cross-site control of the local API."""
@@ -116,6 +160,17 @@ async def local_security_boundary(request: Request, call_next):
     if blocked:
         status_code, detail = blocked
         return JSONResponse({"detail": detail}, status_code=status_code)
+
+    public_lan_paths = {"/api/health", "/api/pair/status", "/api/pair"}
+    if (PAIRING.enabled and not _loopback_client(request)
+            and request.url.path.startswith("/api/")
+            and request.url.path not in public_lan_paths
+            and not PAIRING.authenticate(_session_token(request))):
+        return JSONResponse(
+            {"detail": "pair this device with the Pixelith desktop first"},
+            status_code=401,
+            headers={"Cache-Control": "no-store"},
+        )
 
     response = await call_next(request)
     for header, value in SECURITY_HEADERS.items():
@@ -143,7 +198,21 @@ class EstimateRequest(BaseModel):
 
 
 @app.get("/api/health")
-def health() -> dict:
+def health(request: Request) -> dict:
+    pairing_state = PAIRING.status()
+    mobile_limits = {
+        "max_upload_bytes": MOBILE_UPLOAD_BYTES,
+        "max_preview_bytes": PREVIEW_UPLOAD_BYTES,
+        "max_queue_files": 4,
+    }
+    if (PAIRING.enabled and not _loopback_client(request)
+            and not PAIRING.authenticate(_session_token(request))):
+        # Enough to render the pairing screen, without disclosing hardware,
+        # licence or job capability details to an unpaired LAN client.
+        return {
+            "status": "pairing_required", "version": __version__,
+            "pairing": pairing_state, "mobile_limits": mobile_limits,
+        }
     available = available_providers()
     return {
         "status": "ok",
@@ -164,7 +233,53 @@ def health() -> dict:
         "platform": platform_summary(),
         "license": license_info(),
         "allowance": licensing.allowance_status(),
+        "pairing": pairing_state,
+        "mobile_limits": mobile_limits,
     }
+
+
+class PairRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+
+
+@app.get("/api/pair/status")
+def pair_status(request: Request) -> dict:
+    state = PAIRING.status()
+    state["paired"] = _loopback_client(request) or PAIRING.authenticate(
+        _session_token(request)
+    )
+    return state
+
+
+@app.get("/api/pair/code")
+def pair_code(request: Request) -> dict:
+    if not _loopback_client(request):
+        raise HTTPException(403, "the pairing code is shown only on the desktop")
+    code, expires = PAIRING.current_code()
+    return {"code": code, "expires_in": expires}
+
+
+@app.post("/api/pair")
+def pair_device(req: PairRequest, request: Request) -> JSONResponse:
+    client = request.client.host if request.client else "unknown"
+    try:
+        token, max_age = PAIRING.pair(req.code, client)
+    except PairingError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    response = JSONResponse({"paired": True, "expires_in": max_age})
+    response.set_cookie(
+        "pixelith_session", token, max_age=max_age, httponly=True,
+        samesite="strict", secure=request.url.scheme == "https", path="/",
+    )
+    return response
+
+
+@app.post("/api/pair/revoke")
+def revoke_pairing(request: Request) -> JSONResponse:
+    PAIRING.revoke(_session_token(request))
+    response = JSONResponse({"paired": False})
+    response.delete_cookie("pixelith_session", path="/")
+    return response
 
 
 @app.get("/api/models")
@@ -289,6 +404,7 @@ def estimate(req: EstimateRequest) -> dict:
 
 @app.post("/api/jobs", status_code=201)
 async def create_job(
+    request: Request,
     file: UploadFile = File(...),
     model: str = Form("fast"),
     preset: str | None = Form(None),
@@ -321,14 +437,17 @@ async def create_job(
     if target_fps is not None and target_fps not in VIDEO_FPS_CHOICES:
         raise HTTPException(400, f"unsupported output FPS {target_fps}")
 
+    upload_limit = _upload_limit(request)
+    if upload_limit <= 0:
+        raise HTTPException(507, "not enough free storage for another upload")
     dest = UPLOAD_DIR / f"{uuid.uuid4().hex}_{name}"
     size = 0
     try:
         with dest.open("wb") as out:
             while chunk := await file.read(1 << 20):
                 size += len(chunk)
-                if size > MAX_UPLOAD_BYTES:
-                    raise HTTPException(413, "file is larger than the 8 GiB limit")
+                if size > upload_limit:
+                    raise HTTPException(413, f"file exceeds this device's {upload_limit}-byte limit")
                 out.write(chunk)
     except HTTPException:
         dest.unlink(missing_ok=True)
@@ -422,6 +541,7 @@ def deactivate() -> dict:
 
 @app.post("/api/preview")
 async def make_preview(
+    request: Request,
     file: UploadFile = File(...),
     model: str = Form("fast"),
     preset: str | None = Form(None),
@@ -447,14 +567,17 @@ async def make_preview(
     if aspect_mode not in ASPECT_MODES:
         raise HTTPException(400, f"unknown aspect mode {aspect_mode!r}")
 
+    upload_limit = _upload_limit(request, preview=True)
+    if upload_limit <= 0:
+        raise HTTPException(507, "not enough free storage for a preview")
     dest = UPLOAD_DIR / f"preview_{uuid.uuid4().hex}_{name}"
     size = 0
     try:
         with dest.open("wb") as out:
             while chunk := await file.read(1 << 20):
                 size += len(chunk)
-                if size > MAX_UPLOAD_BYTES:
-                    raise HTTPException(413, "file is larger than the 8 GiB limit")
+                if size > upload_limit:
+                    raise HTTPException(413, "file is too large for a mobile preview")
                 out.write(chunk)
     except HTTPException:
         dest.unlink(missing_ok=True)

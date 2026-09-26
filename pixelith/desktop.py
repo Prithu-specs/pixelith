@@ -12,6 +12,8 @@ import urllib.request
 
 from pixelith import __version__
 from pixelith.compat import summary
+from pixelith.discovery import DiscoveryService
+from pixelith.pairing import PAIRING
 
 
 def free_port(preferred: int = 8420) -> int:
@@ -63,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     url = f"http://127.0.0.1:{port}"
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
+    discovery = None
+    if args.lan:
+        PAIRING.enable()
+        discovery = DiscoveryService(port, __version__)
+        discovery.start()
     worker = threading.Thread(target=server.run, name="pixelith-server", daemon=True)
     worker.start()
     try:
@@ -77,6 +84,9 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         server.should_exit = True
         worker.join(timeout=5)
+        if discovery:
+            discovery.stop()
+        PAIRING.disable()
     return 0
 
 

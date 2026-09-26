@@ -41,6 +41,10 @@ const POLL_MS = 1500;
 const ASSUMED_FPS = 30;               // API contract: assume 30 when fps is unknown
 const VIDEO_FPS_OPTIONS = [24, 30, 60, 120];
 const TERMINAL = new Set(['done', 'error', 'cancelled']);
+const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (matchMedia('(pointer: coarse)').matches && innerWidth < 900);
+const IS_LOOPBACK = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
+let mobileLimits = { max_upload_bytes: 512 * 1024 ** 2, max_preview_bytes: 256 * 1024 ** 2, max_queue_files: 4 };
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif', 'bmp', 'tif', 'tiff'];
 const VIDEO_EXT = ['mp4', 'mov', 'mkv', 'webm', 'avi'];
@@ -85,6 +89,8 @@ const el = {
   form:         $('#compose-form'),
   dropzone:     $('#dropzone'),
   fileInput:    $('#file-input'),
+  photoInput:   $('#photo-input'),
+  videoInput:   $('#video-input'),
   queueWrap:    $('#queue-wrap'),
   queue:        $('#queue'),
   queueCount:   $('#queue-count'),
@@ -128,6 +134,14 @@ const el = {
   announcer:    $('#job-announcer'),
   toasts:       $('#toasts'),
   jobTpl:       $('#tpl-job'),
+  pairingHost:  $('#pairing-host'),
+  pairingCode:  $('#pairing-code'),
+  pairingRefresh:$('#pairing-refresh'),
+  pairingDialog:$('#pairing-dialog'),
+  pairingForm:  $('#pairing-form'),
+  pairingInput: $('#pairing-input'),
+  pairingError: $('#pairing-error'),
+  pairingSubmit:$('#pairing-submit'),
 };
 
 /** Files staged for upload but not yet submitted. */
@@ -273,6 +287,7 @@ function setOnline(state, detail) {
 }
 
 function setHealth(health) {
+  if (health.mobile_limits) mobileLimits = health.mobile_limits;
   el.healthPill.className = 'pill pill--ok';
   const bits = [`v${health.version || '?'}`];
   const active = health.active && Object.values(health.active)[0];
@@ -304,6 +319,8 @@ function friendlyError(status, detail) {
     case 415: return `That file type is not supported.${tail}`;
     case 404: return `That job no longer exists on the server.${tail}`;
     case 422: return `The server rejected these settings.${tail}`;
+    case 401: return 'Pair this device with the Pixelith desktop first.';
+    case 507: return `The desktop does not have enough free storage.${tail}`;
     default:
       if (status >= 500) return `The server hit an error (${status}).${tail}`;
       return detail || `Request failed (${status}).`;
@@ -313,7 +330,9 @@ function friendlyError(status, detail) {
 async function api(path, options = {}) {
   let res;
   try {
-    res = await fetch(API + path, options);
+    const headers = new Headers(options.headers || {});
+    if (IS_MOBILE) headers.set('X-Pixelith-Mobile', '1');
+    res = await fetch(API + path, { ...options, headers, credentials: 'same-origin' });
   } catch (err) {
     // AbortError is a deliberate cancellation, not a connectivity problem.
     if (err && err.name === 'AbortError') throw err;
@@ -333,6 +352,7 @@ async function api(path, options = {}) {
     if (res.status === 402 && raw) {
       throw new ApiError(raw.message || 'Free limit reached.', 402, raw);
     }
+    if (res.status === 401) showPairing();
     throw new ApiError(friendlyError(res.status, detail), res.status, raw);
   }
   if (res.status === 204) return null;
@@ -694,6 +714,16 @@ function addFiles(fileList) {
     const kind = kindOf(file);
     if (!kind) { rejected.push(file.name); continue; }
     if (staged.some((s) => s.file.name === file.name && s.file.size === file.size)) continue;
+    if (IS_MOBILE && staged.length >= mobileLimits.max_queue_files) {
+      rejected.push(`${file.name} (mobile queue limit)`); continue;
+    }
+    if (IS_MOBILE && file.size > mobileLimits.max_upload_bytes) {
+      rejected.push(`${file.name} (too large for this mobile session)`); continue;
+    }
+    const queuedBytes = staged.reduce((sum, item) => sum + item.file.size, 0);
+    if (IS_MOBILE && queuedBytes + file.size > mobileLimits.max_upload_bytes) {
+      rejected.push(`${file.name} (mobile storage budget exceeded)`); continue;
+    }
 
     const item = {
       id: `s${++stagedSeq}`,
@@ -1673,6 +1703,10 @@ let previewBusy = false;
  */
 async function runPreview(item) {
   if (previewBusy || !item) return;
+  if (IS_MOBILE && item.file.size > mobileLimits.max_preview_bytes) {
+    toast(`Preview is limited to ${formatBytes(mobileLimits.max_preview_bytes)} on mobile. Start the job directly instead.`, 'error');
+    return;
+  }
   previewBusy = true;
 
   el.previewCompare.hidden = true;
@@ -1862,6 +1896,10 @@ function wireDropzone() {
     addFiles(el.fileInput.files);
     el.fileInput.value = '';       // allow re-picking the same file
   });
+  [el.photoInput, el.videoInput].forEach((input) => input?.addEventListener('change', () => {
+    addFiles(input.files);
+    input.value = '';
+  }));
 
   let depth = 0;
   const over = (on) => el.dropzone.classList.toggle('is-over', on);
@@ -1953,9 +1991,78 @@ function markSettingsUnavailable() {
   }
 }
 
+function showPairing(message = '') {
+  if (IS_LOOPBACK || !el.pairingDialog) return;
+  setText(el.pairingError, message);
+  el.pairingError.hidden = !message;
+  if (typeof el.pairingDialog.showModal === 'function' && !el.pairingDialog.open) {
+    el.pairingDialog.showModal();
+  }
+}
+
+async function refreshPairingCode() {
+  if (!IS_LOOPBACK || !el.pairingHost) return;
+  try {
+    const data = await api('/pair/code');
+    const code = String(data.code || '').padStart(6, '0');
+    setText(el.pairingCode, `${code.slice(0, 3)} ${code.slice(3)}`);
+    el.pairingHost.hidden = false;
+  } catch { el.pairingHost.hidden = true; }
+}
+
+async function ensurePairing() {
+  try {
+    const state = await api('/pair/status');
+    if (!state.pairing_required) {
+      if (el.pairingHost) el.pairingHost.hidden = true;
+      return true;
+    }
+    if (IS_LOOPBACK) {
+      await refreshPairingCode();
+      return true;
+    }
+    if (!state.paired) {
+      showPairing();
+      return false;
+    }
+    if (el.pairingDialog?.open) el.pairingDialog.close();
+    return true;
+  } catch {
+    showPairing('Could not check the pairing state.');
+    return false;
+  }
+}
+
+function wirePairing() {
+  el.pairingRefresh?.addEventListener('click', refreshPairingCode);
+  el.pairingForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const code = String(el.pairingInput.value || '').replace(/\D/g, '');
+    if (code.length !== 6) {
+      showPairing('Enter the complete six-digit code.');
+      return;
+    }
+    el.pairingSubmit.disabled = true;
+    try {
+      await api('/pair', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      el.pairingInput.value = '';
+      el.pairingDialog.close();
+      toast('Paired with this Pixelith desktop for this session.', 'success');
+      await boot();
+    } catch (err) {
+      showPairing(err.message || 'Pairing failed.');
+    } finally { el.pairingSubmit.disabled = false; }
+  });
+}
+
 async function boot() {
   const ok = await checkHealth();
   if (!ok) { markSettingsUnavailable(); updateSubmitState(); return; }
+
+  if (!await ensurePairing()) return;
 
   await Promise.all([loadModels(), loadPresets(), loadAllowance(), loadPricing()]);
   applySettings(loadSettings());
@@ -1966,6 +2073,7 @@ async function boot() {
 
 function init() {
   wireDropzone();
+  wirePairing();
   wirePaywall();
   wirePreview();
   wireSettings();
@@ -1978,6 +2086,11 @@ function init() {
 
   // While offline, keep probing quietly so the UI heals on its own.
   setInterval(() => { if (online === false) boot(); }, 8000);
+  // A successful mobile pairing rotates the one-time code on the server. Keep
+  // the desktop display current without exposing the code to LAN clients.
+  setInterval(() => {
+    if (IS_LOOPBACK && el.pairingHost && !el.pairingHost.hidden) refreshPairingCode();
+  }, 30000);
 
   // Streams do not survive a backgrounded tab on mobile; resync on return.
   document.addEventListener('visibilitychange', () => {

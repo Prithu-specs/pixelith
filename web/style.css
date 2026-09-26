@@ -280,6 +280,7 @@ h1, h2, h3 { line-height: 1.25; font-weight: 620; letter-spacing: -.011em; }
 .dropzone__lead { font-weight: 620; font-size: var(--fs-md); }
 .dropzone__sub  { color: var(--text-2); font-size: var(--fs-sm); margin-top: 2px; }
 .dropzone__btn { margin-top: var(--s-4); display: inline-flex; }
+.native-pickers { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin-top: .65rem; }
 /* The file input is visually hidden, so its focus ring is drawn on the label. */
 #file-input:focus-visible + .dropzone__btn { outline: 2px solid var(--accent); outline-offset: 3px; }
 .dropzone__hint {
@@ -962,3 +963,27 @@ input[type="range"]::-moz-range-thumb {
 .preview-dlg { max-width: 46rem; }
 .preview-dlg .compare { margin: .2rem 0; }
 .preview-btn { margin-top: .6rem; width: 100%; }
+
+/* ------------------------------------------------------- secure pairing -- */
+.pairing-host {
+  max-width: 1180px; margin: .75rem auto 0; padding: .8rem 1rem;
+  display: grid; grid-template-columns: 1fr auto auto; gap: 1rem;
+  align-items: center; border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm); background: var(--accent-soft);
+}
+.pairing-host[hidden] { display: none; }
+.pairing-host p { margin: .2rem 0 0; color: var(--text-2); font-size: var(--fs-xs); }
+.pairing-code {
+  font: 750 1.45rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .1em; color: var(--accent); white-space: nowrap;
+}
+.permission-copy {
+  border: 1px solid var(--line); border-radius: 8px; padding: .7rem .8rem;
+  background: var(--bg-sunken); font-size: var(--fs-xs);
+}
+.permission-copy p { margin: .25rem 0 0; color: var(--text-2); }
+#pairing-input { font: 700 1.3rem/1.2 ui-monospace, monospace; letter-spacing: .22em; text-align: center; }
+@media (max-width: 42rem) {
+  .pairing-host { grid-template-columns: 1fr auto; margin-inline: .75rem; }
+  .pairing-host > div { grid-column: 1 / -1; }
+}

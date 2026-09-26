@@ -81,7 +81,8 @@ python -m pixelith serve
 Open **http://127.0.0.1:8420**. Drop in a photo and press start. The model
 downloads itself on first use (4.6 MB).
 
-Add `--lan` and it prints an address you can open on your phone.
+Add `--lan` and Pixelith advertises itself on the local network, prints a phone
+address, and shows a temporary six-digit pairing code.
 
 **Three things worth trying, and worth telling us about:**
 
@@ -201,9 +202,9 @@ for an ordinary laptop:
 
 | Device | How |
 |---|---|
-| **Android** phone/tablet | Start with `--lan`, open the printed address in Chrome |
-| **iPhone / iPad** | Same, in Safari. HEIC photos upload and convert correctly |
-| **Any laptop** on the network | Same address, any modern browser |
+| **Android** phone/tablet | Start with `--lan`, select the discovered desktop or open its address, then pair |
+| **iPhone / iPad** | Same in Safari; the system photo picker provides HEIC files without full-library access |
+| **Any laptop** on the network | Same address and temporary pairing code, in any modern browser |
 
 Android and iOS install the Pixelith companion interface from the browser. The
 current mobile beta does not run AI inference on the phone; it points the phone
@@ -216,12 +217,14 @@ python -m pixelith serve --lan
 ```
   this computer   http://127.0.0.1:8420
   phone / tablet  http://192.168.1.104:8420
+  temporary code  123 456
 ```
 
-There is **no sign-in, no account and no password** — anyone who opens that
-address can use it straight away. That is the point on your own Wi-Fi. The flip
-side is that Pixelith does not check who is asking, so use `--lan` on a network
-you trust rather than on public café Wi-Fi.
+There is **no sign-in, no account and no permanent password**. The temporary
+code expires after five minutes and creates a cryptographically random 12-hour
+session on that device. Codes are rate limited and rotate after use; restarting
+Pixelith revokes every mobile session. LAN mode remains intended for a private,
+trusted network rather than public café Wi-Fi.
 
 ### Running without a GPU
 
@@ -757,6 +760,9 @@ guest VLAN), and the computer's firewall must allow the port. On Windows,
 approve the prompt for "Private networks" the first time. On macOS, check System
 Settings > Network > Firewall. If `--lan` prints no address, the machine has no
 routable LAN interface, which usually means a VPN is capturing the route.
+If Pixelith is visible but refuses controls, enter the current six-digit code
+shown on the desktop. Codes expire after five minutes; choose **New code** on
+the desktop if needed.
 
 ### HEIC photos are rejected
 

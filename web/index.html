@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Pixelith">
 <title>Pixelith</title>
-<link rel="stylesheet" href="style.css?v=video-speed-3">
+<link rel="stylesheet" href="style.css?v=store-ready-1">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235b5bd6'/%3E%3Cpath d='M9 20h6v-6H9zM17 9h6v6h-6z' fill='%23fff'/%3E%3C/svg%3E">
@@ -96,6 +96,15 @@
   </button>
 </div>
 
+<section id="pairing-host" class="pairing-host" hidden aria-live="polite">
+  <div>
+    <strong>Connect a phone or tablet</strong>
+    <p>On the mobile device, choose Pixelith from nearby devices and enter this temporary code. It creates a cryptographically authenticated local session, not an account.</p>
+  </div>
+  <output id="pairing-code" class="pairing-code" aria-label="Temporary pairing code">--- ---</output>
+  <button type="button" class="btn btn--ghost btn--sm" id="pairing-refresh">New code</button>
+</section>
+
 <main class="layout">
 
   <!-- ───────────────────────── Compose column ───────────────────────── -->
@@ -114,10 +123,19 @@
         <input id="file-input" class="visually-hidden" type="file" multiple
                aria-describedby="dropzone-hint"
                accept="image/*,video/*,.png,.jpg,.jpeg,.webp,.heic,.heif,.bmp,.tif,.tiff,.mp4,.mov,.mkv,.webm,.avi">
+        <input id="photo-input" class="visually-hidden" type="file" multiple
+               accept="image/*,.heic,.heif" aria-describedby="picker-permission">
+        <input id="video-input" class="visually-hidden" type="file" multiple
+               accept="video/*" aria-describedby="picker-permission">
         <label class="btn btn--primary dropzone__btn" for="file-input">Choose files</label>
+        <div class="native-pickers" aria-label="Device media pickers">
+          <label class="btn btn--ghost btn--sm" for="photo-input">Photo library</label>
+          <label class="btn btn--ghost btn--sm" for="video-input">Video library</label>
+        </div>
         <p id="dropzone-hint" class="dropzone__hint">
           PNG, JPG, WEBP, HEIC, BMP, TIFF &middot; MP4, MOV, MKV, WEBM, AVI
         </p>
+        <p id="picker-permission" class="dropzone__hint">Pixelith asks only for the photos or videos you select. Your full library is never read, scanned, or uploaded to the cloud.</p>
       </div>
 
       <!-- Staged files -->
@@ -380,6 +398,26 @@
   </div>
 </dialog>
 
+<dialog id="pairing-dialog" class="paywall" aria-labelledby="pairing-title">
+  <form id="pairing-form" class="paywall__inner">
+    <h2 class="paywall__title" id="pairing-title">Pair with your Pixelith desktop</h2>
+    <p class="paywall__detail">Make sure both devices are on the same trusted Wi-Fi. Enter the six-digit code shown by Pixelith on the desktop. No account or permanent password is created.</p>
+    <label class="paywall__field">
+      <span>Temporary pairing code</span>
+      <input id="pairing-input" inputmode="numeric" autocomplete="one-time-code"
+             pattern="[0-9]{6}" maxlength="6" placeholder="000000" required>
+    </label>
+    <p class="paywall__error" id="pairing-error" hidden></p>
+    <div class="permission-copy">
+      <strong>Why Pixelith needs local-network access</strong>
+      <p>Your phone sends only media you choose to your own computer for processing. Pixelith does not contact a cloud upscaling service.</p>
+    </div>
+    <div class="paywall__actions">
+      <button type="submit" class="btn btn--primary" id="pairing-submit">Pair securely</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="paywall" class="paywall">
   <form method="dialog" class="paywall__inner">
     <h2 class="paywall__title">You have reached the free limit</h2>
@@ -433,6 +471,8 @@
     &copy; 2026 PGA Tech Solutions &middot;
     <a href="https://github.com/Prithu-specs/pixelith/blob/main/LICENSE"
        target="_blank" rel="noopener noreferrer">Pixelith EULA 1.0</a>
+    &middot; <a href="https://pixelith.in/privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a>
+    &middot; <a href="https://pixelith.in/support.html" target="_blank" rel="noopener noreferrer">Support</a>
   </p>
   <p class="site-footer__terms">
     <strong>Free and unlimited during the public beta, until 5 December 2026.</strong> Nothing is charged and there is no payment step in the app;
@@ -491,6 +531,6 @@
   </li>
 </template>
 
-<script src="app.js?v=video-speed-3"></script>
+<script src="app.js?v=store-ready-1"></script>
 </body>
 </html>

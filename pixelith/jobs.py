@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import shutil
 import threading
 import time
 import uuid
@@ -99,6 +100,8 @@ class JobManager:
         self._subs: dict[str, list[queue.Queue]] = {}
         self._queue: queue.Queue[str] = queue.Queue()
         self._engines: dict[tuple, Engine] = {}
+        self._closed = False
+        self._cleanup_orphans()
         self._worker = threading.Thread(target=self._run_forever, daemon=True)
         self._worker.start()
 
@@ -146,6 +149,7 @@ class JobManager:
         job._cancel.set()
         if job.status == "queued":
             self._finish(job, "cancelled", "cancelled before it started")
+            self._cleanup_partial(job)
         else:
             # Cancellation is cooperative: the worker checks between tiles and
             # frames, so the job settles a moment later. Say so meanwhile.
@@ -168,7 +172,22 @@ class JobManager:
                     Path(path).unlink()
             except OSError:
                 pass
+        shutil.rmtree(WORK_DIR / job_id, ignore_errors=True)
         return True
+
+    def shutdown(self) -> None:
+        """Cancel active work and remove partial artifacts on app shutdown."""
+        self._closed = True
+        with self._lock:
+            jobs = list(self._jobs.values())
+        for job in jobs:
+            if job.status not in TERMINAL:
+                job._cancel.set()
+        self._worker.join(timeout=15)
+        if not self._worker.is_alive():
+            for job in jobs:
+                if job.status != "done":
+                    self._cleanup_partial(job)
 
     def subscribe(self, job_id: str) -> Iterator[dict]:
         """Yield job snapshots until the job reaches a terminal state."""
@@ -321,11 +340,17 @@ class JobManager:
 
     def _run_forever(self) -> None:
         while True:
-            job_id = self._queue.get()
+            if self._closed and self._queue.empty():
+                return
+            try:
+                job_id = self._queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
             job = self.get(job_id)
             if job is None or job._cancel.is_set():
                 if job:
                     self._finish(job, "cancelled", "cancelled before it started")
+                    self._cleanup_partial(job)
                 continue
             try:
                 self._execute(job)
@@ -384,9 +409,40 @@ class JobManager:
             self._finish(job, "done", f"saved to {job.output_path.name}")
         except Cancelled:
             self._finish(job, "cancelled", "cancelled")
+            self._cleanup_partial(job)
         except Exception as exc:  # noqa: BLE001
             self._finish(job, "error", "failed", str(exc))
+            self._cleanup_partial(job)
             raise
+        finally:
+            # Segmented video scratch is never a deliverable.  A completed
+            # output has already been atomically promoted by the pipeline.
+            shutil.rmtree(WORK_DIR / job.id, ignore_errors=True)
+
+    def _cleanup_partial(self, job: Job) -> None:
+        for path in (job.source_path, job.output_path):
+            try:
+                if path and Path(path).exists():
+                    Path(path).unlink()
+            except OSError:
+                log.warning("could not remove interrupted artifact %s", path)
+        shutil.rmtree(WORK_DIR / job.id, ignore_errors=True)
+
+    def _cleanup_orphans(self) -> None:
+        """Remove abandoned uploads after a generous age, never fresh work."""
+        upload_dir = WORK_DIR / "uploads"
+        cutoff = time.time() - 7 * 24 * 60 * 60
+        if upload_dir.exists():
+            for path in upload_dir.iterdir():
+                try:
+                    if path.stat().st_mtime >= cutoff:
+                        continue
+                    if path.is_file() or path.is_symlink():
+                        path.unlink()
+                    elif path.is_dir():
+                        shutil.rmtree(path, ignore_errors=True)
+                except OSError:
+                    log.warning("could not remove orphan upload %s", path)
 
 
 MANAGER = JobManager()

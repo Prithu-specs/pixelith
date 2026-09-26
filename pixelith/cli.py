@@ -34,6 +34,8 @@ def _bar(frac: float, width: int = 32) -> str:
 
 def cmd_serve(args: argparse.Namespace) -> int:
     from .compat import lan_address, summary
+    from .discovery import DiscoveryService
+    from .pairing import PAIRING
     from .server import serve
 
     host = "0.0.0.0" if args.lan else args.host
@@ -43,19 +45,27 @@ def cmd_serve(args: argparse.Namespace) -> int:
           f"{info['cpus']} cores, {info['ram_gb']} GB")
     print(f"  this computer   http://127.0.0.1:{args.port}")
     if args.lan:
+        code = PAIRING.enable()
         ip = lan_address()
         if ip:
             print(f"  phone / tablet  http://{ip}:{args.port}")
-            print("     Open that on any device on the same Wi-Fi. No app needed.")
+            print("     Pixelith advertises itself automatically on the local network.")
         else:
             print("  phone / tablet  could not detect a LAN address; check your network")
-        print("     No sign-in and no account: anyone on this network can "
-              "just open it.")
-        print("     Use --lan on a network you trust, not on public Wi-Fi.")
+        print(f"     Temporary pairing code: {code[:3]} {code[3:]}")
+        print("     No sign-in or account. The code expires after five minutes.")
     else:
         print("  (use --lan to reach it from a phone or tablet on the same Wi-Fi)")
     print(f"Results are written to {OUTPUT_DIR}")
-    serve(host, args.port, args.reload)
+    discovery = DiscoveryService(args.port, __version__) if args.lan else None
+    if discovery:
+        discovery.start()
+    try:
+        serve(host, args.port, args.reload)
+    finally:
+        if discovery:
+            discovery.stop()
+        PAIRING.disable()
     return 0
 
 
