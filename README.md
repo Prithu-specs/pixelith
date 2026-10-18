@@ -1,5 +1,45 @@
 # Pixelith
 
+### GPU-first update (local patch, 5 October 2026)
+
+Pixelith now **runs on your graphics hardware by default** — Core ML on Apple
+silicon, DirectML on any DirectX 12 GPU or iGPU on Windows, CUDA on NVIDIA,
+OpenVINO on Intel. The old preference tables could silently pick plain CPU on
+machines that own a working accelerator; a hardware provider now always wins
+when the session actually lands on it, and the CPU is left free for FFmpeg.
+
+The estimator also **measures your machine** instead of quoting a benchmark
+from ours, and the encoder now prefers **hardware video encoders**
+(VideoToolbox / NVENC / QSV / AMF) in *both* encoding modes — including
+Preserve quality, which used to run software x265 that at 8K could take
+longer than the neural pass itself.
+
+One install step decides whether all of this engages:
+
+```sh
+pip install onnxruntime-directml   # Windows - any DX12 GPU, even an iGPU
+pip install onnxruntime-gpu        # Linux - CUDA 12 (rocm.ai: onnxruntime-rocm)
+pip install onnxruntime            # macOS - CoreML is inside the base wheel
+```
+
+If the app reports “using CPU only” in its health pill, the plain CPU-only
+wheel is installed; the warning names the exact wheel to add. Video encoding
+uses hardware encoders when FFmpeg offers them (`brew install ffmpeg`,
+`winget install Gyan.FFmpeg`, or your Linux package manager).
+
+### CPU + GPU together (hybrid co-execution)
+
+When the primary provider is Apple's **Core ML**, Pixelith now runs a
+**second, plain-CPU worker beside it** — the GPU and Neural Engine take most
+tiles while idle CPU cores take the rest; whichever worker frees up first
+pulls the next tile. One job, both processors. The same applies to
+machines with a discrete GPU: a CUDA/DirectML primary gets a CPU co-worker
+when memory allows (8 GB+). Two CPU-only workers are never combined (they
+would fight over the same cores), and `PIXELITH_NO_HYBRID=1` turns
+co-execution off if a machine shows memory-bandwidth contention. The health
+endpoint reports what your install does; job reports include a `devices`
+summary like `{"mode": "hybrid", "devices": "CoreML + CPU", "workers": 2}`.
+
 ### Video quality and speed update (local patch, 9 September 2026)
 
 The web interface now offers **Preserve quality** video encoding by default.

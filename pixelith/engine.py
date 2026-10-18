@@ -54,14 +54,26 @@ def available_providers() -> list[str]:
 def choose_providers(
     requested: list[str] | None = None, spec: "ModelSpec | None" = None
 ) -> list[str]:
-    """Rank the runtimes this machine actually has, fastest first.
+    """Rank the runtimes this machine actually has, GPU/NPU first.
 
     Provider speed is a property of the *network*, not just the machine. A
     compact model can lose to plain CPU on Apple silicon because per-dispatch
     overhead dominates its tiny graph, while a deep model wins big on CoreML.
     Each ModelSpec therefore carries its own measured preference.
+
+    Since the GPU-first change, a hardware provider always wins when the
+    session actually lands on it, for every network. A GPU that runs a compact
+    network 2x slower than the CPU still leaves the CPU idle and free for
+    the FFmpeg workers around the inference; and for the quality model the
+    same GPU is many times faster. A machine with an accelerator should
+    never quietly fall back to CPU just because a preference table was
+    tuned elsewhere.
     """
     have = set(available_providers())
+
+    def on_hardware(prov: str) -> bool:
+        return provider_profile(prov).kind in ("gpu", "npu", "heterogeneous")
+
     if requested:
         picked = [p for p in requested if p in have]
         if picked:
@@ -72,7 +84,14 @@ def choose_providers(
     order = list(spec.preferred_providers) if spec and spec.preferred_providers else []
     order += [p for p in _PREFERRED if p not in order]
     ranked = [p for p in order if p in have]
-    return ranked or ["CPUExecutionProvider"]
+    if not ranked:
+        return ["CPUExecutionProvider"]
+
+    # GPU FIRST: keep providers whose sessions truly activate hardware ahead of
+    # CPU, regardless of which table the speed preference came from.
+    hardware = [p for p in ranked if on_hardware(p)]
+    cpu_only = [p for p in ranked if not on_hardware(p)]
+    return hardware + cpu_only if hardware else cpu_only
 
 
 # Measured optimum tile size per execution provider (1080p, compact model,
@@ -195,15 +214,59 @@ class Engine:
         providers = choose_providers(self.settings.providers or None, spec)
 
         # Which provider wins depends on the machine, not just the model, so
-        # measure it once here rather than trusting a preference measured
+        # measure it once rather than trusting a preference measured
         # somewhere else. Explicit --providers skips this entirely.
+        #
+        # GPU FIRST: calibration may reorder among hardware providers, but it
+        # can no longer put CPU ahead of a provider whose session actually
+        # lands on GPU/NPU. If it measures CPU as faster, we keep a hardware
+        # session and hand the CPU back to the FFmpeg decode/encode workers.
+        # The one exception: a compact network that genuinely cannot run on
+        # this hardware (calibration had to fall back to CPU there) may keep
+        # CPU first, because a hardware session that spends its life in CPU
+        # fallback is slower still.
         if not self.settings.providers and len(providers) > 1:
             try:
-                from .calibrate import choose as calibrated
+                from .calibrate import choose as calibrated, timed_seconds
 
                 best = calibrated(spec, path, providers, opts)
                 if best in providers:
-                    providers = [best] + [p for p in providers if p != best]
+                    hardware = [
+                        p for p in providers
+                        if provider_profile(p).kind
+                        in ("gpu", "npu", "heterogeneous")
+                    ]
+                    cpu = [p for p in providers if p not in hardware]
+                    if best in hardware or not hardware:
+                        order = [best] + [p for p in providers if p != best]
+                    else:
+                        # Calibration picked CPU while real hardware exists.
+                        # Its timings tell whether the network actually runs
+                        # on hardware; a provider with no timing at all either
+                        # failed to start or was never benchmarked, so keep it
+                        # in front rather than silently dropping accelerator
+                        # support the machine owns.
+                        times = timed_seconds(spec.key)
+                        hw_time = next(
+                            (times[p] for p in hardware if times.get(p)), None
+                        )
+                        cpu_time = next(
+                            (times[p] for p in cpu if times.get(p)), None
+                        )
+                        # Honour hardware unless both sides were measured and
+                        # CPU crushes it by 4x or more — the signature of a
+                        # network that never really ran on this accelerator.
+                        hw_usable = hw_time is None or (
+                            cpu_time is not None and cpu_time < hw_time / 4.0
+                        )
+                        if hw_usable:
+                            order = [
+                                p for p in providers if p in hardware
+                            ] + cpu
+                        else:
+                            order = [best] + [p for p in providers if p != best]
+                    if order and order[0] in providers:
+                        providers = order
             except Exception:  # noqa: BLE001 - fall back to the static order
                 pass
 
@@ -259,6 +322,25 @@ class Engine:
     @property
     def active_providers(self) -> list[str]:
         return [self.provider, *self._worker_providers]
+
+    def device_summary(self) -> dict:
+        """Human-readable CPU+GPU co-execution status for UI and reports."""
+        def short(name: str) -> str:
+            return name.replace("ExecutionProvider", "")
+
+        if len(self._worker_providers):
+            return {
+                "mode": "hybrid",
+                "devices": " + ".join(
+                    short(p) for p in self.active_providers
+                ),
+                "workers": self.workers,
+            }
+        return {
+            "mode": "single",
+            "devices": short(self.provider),
+            "workers": 1,
+        }
 
     def _run_tile(
         self, tile: np.ndarray, worker: _Worker | None = None

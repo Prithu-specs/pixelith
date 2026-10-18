@@ -192,13 +192,34 @@ def estimate_seconds(
     `throughput` is input megapixels/second for the *fast* model on this
     machine; each model scales it by its measured relative cost.
 
-    The figure below is deliberately an end-to-end number: a 1920x1080 frame
-    through the fast model takes 3.7 s wall clock on an M5 Pro, which is
-    2.07 MPix / 3.7 s. Timing a single repeated tile suggests something far
-    rosier and is wrong - it re-runs one cached shape and ignores tiling
-    entirely.
+    The fallback figure below is deliberately an end-to-end number: a
+    1920x1080 frame through the fast model takes 3.7 s wall clock on an
+    M5 Pro, which is 2.07 MPix / 3.7 s. Timing a single repeated tile
+    suggests something far rosier and is wrong - it re-runs one cached
+    shape and ignores tiling entirely.
+
+    Since GPU-first calibration, the estimate prefers this machine's own
+    measured number. Calibration times a real tiled 240x360 probe, whose
+    geometry (a 2-tile column at 128 px steps with 192 px tiles, ~0.103
+    input MPix) turns its stored seconds into input megapixels per second.
+    A machine measured at 0.05 MPix/s gets an honest multi-day estimate
+    instead of a flattering one; a GPU-accelerated machine gets a small
+    one. The static M5-Pro figure is only the last resort.
     """
     spec = MODELS[model]
+    if throughput is None:
+        from .calibrate import _PROBE, _PROBE_WIDTH, timed_seconds
+
+        times = timed_seconds("fast")
+        cpu = times.get("CPUExecutionProvider")
+        chosen = times.get("CPUExecutionProvider")
+        if chosen:
+            tiles_x = max(1, -(-_PROBE_WIDTH // max(1, 192 - 32)))
+            tiles_y = max(1, -(-_PROBE // max(1, 192 - 32)))
+            probe_mpix = tiles_x * tiles_y * (192 * 192) / 1e6
+            mpix_per_s = probe_mpix / max(chosen, 1e-6)
+            if mpix_per_s > 0.005:
+                throughput = mpix_per_s
     base = throughput or 0.56  # measured end-to-end: fast model, 1080p, M5 Pro
     rate = base / spec.cost
 
@@ -365,6 +386,7 @@ def upscale_image(
         "model": spec.key,
         "provider": eng.provider,
         "providers": eng.active_providers,
+        "devices": eng.device_summary(),
         "output": str(dest),
         "had_alpha": alpha is not None,
         "source_mode": mode,

@@ -129,7 +129,12 @@ ASPECT_RATIOS: dict[str, tuple[int, int] | None] = {
     "9:16": (9, 16),
 }
 ASPECT_MODES = ("fit", "fill", "stretch")
-VIDEO_FPS_CHOICES = (24, 30, 60, 120)
+# Frame-rate stops for the output slider. "None" (the default) keeps the
+# source rate; these are the explicit upgrade stops. 24/30/60/120 were the
+# original set; 144 and 240 serve high-refresh deliverables (gaming,
+# slow-motion masters). Duplicated frames are produced by the encoder AFTER
+# inference; motion is never synthesised.
+VIDEO_FPS_CHOICES = (24, 30, 60, 120, 144, 240)
 
 # A finished file must satisfy both limits. Three times the source is the
 # normal ceiling; one decimal GB is the non-negotiable hard ceiling.

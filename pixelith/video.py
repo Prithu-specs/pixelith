@@ -13,6 +13,7 @@ sequence, which for 8K would be hundreds of gigabytes.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 import time
@@ -29,6 +30,8 @@ from .compression import (AUDIO_BITRATE, OutputTooLarge, expansion_ratio,
 from .config import VIDEO_FPS_CHOICES, UpscaleSettings
 from .engine import Cancelled, Engine
 from .pipeline import Plan, fit_to_canvas, limit_video_ai_passes, plan
+
+log = logging.getLogger("pixelith.video")
 
 SEGMENT_FRAMES = 240  # ~8 s at 30 fps
 
@@ -112,40 +115,89 @@ def _available_encoders() -> str:
     ).stdout
 
 
+# Hardware encoders to try, in preference order. A name only counts when this
+# FFmpeg build advertises it (a macOS-only encoder never appears in a Windows
+# or Linux build), and every candidate is proven by a real one-frame probe
+# run in _encoder_works before the job relies on it. NVENC covers NVIDIA,
+# QSV covers Intel, AMF covers AMD, VideoToolbox covers Apple silicon.
+_HW_HEVC = ("hevc_videotoolbox", "hevc_nvenc", "hevc_qsv", "hevc_amf")
+_HW_H264 = ("h264_videotoolbox", "h264_nvenc", "h264_qsv", "h264_amf")
+
+
+def _hw_encoder_args(encoder: str, bitrate: int | None, big: bool) -> list[str]:
+    """Arguments for one hardware encoder in either encoding mode."""
+    tag = ["-tag:v", "hvc1"] if big else []
+    sw = ["-allow_sw", "1"] if "videotoolbox" in encoder else []
+    if bitrate is not None:
+        rate = [
+            "-b:v", str(bitrate),
+            "-maxrate", str(int(bitrate * 1.25)),
+            "-bufsize", str(bitrate * 2),
+        ]
+        if "videotoolbox" in encoder:
+            return ["-c:v", encoder, *sw, *rate, *tag]
+        return ["-c:v", encoder, *rate, *tag]
+    # Quality mode. x265's CRF has no exact hardware equivalent, but a
+    # constant-quality (ICQ) control achieves the same intent: steady
+    # quality with a variable bitrate, and 10-30x the encode speed.
+    if "videotoolbox" in encoder:
+        # VideoToolbox has no constant-quality switch in FFmpeg; a high,
+        # predictable bitrate preserves the intent (Visually lossless
+        # territory for the frame sizes Pixelith produces).
+        return ["-c:v", encoder, *sw,
+                "-b:v", str(100_000_000 if big else 24_000_000), *tag]
+    if "nvenc" in encoder:
+        return ["-c:v", encoder, "-preset", "p5", "-rc", "vbr",
+                "-cq", "19", "-b:v", "0", *tag]
+    if "qsv" in encoder:
+        return ["-c:v", encoder, "-preset", "fast", "-global_quality", "22", *tag]
+    # AMF offers no constant-quality control: skip it in quality mode.
+    return []
+
+
 def _encoder_args(
     width: int,
     height: int,
     bitrate: int | None,
     prefer_hw: bool = True,
 ) -> list[str]:
-    """Pick a codec. Above 4K we need HEVC; H.264 levels do not cover 8K."""
+    """Pick a codec. Above 4K we need HEVC; H.264 levels do not cover 8K.
+
+    Hardware encoders are tried first in BOTH encoding modes. Software x265
+    used to run even in Preserve-quality mode, where at 8K it could take
+    longer than the neural pass itself and dominate the wall clock.
+    """
     big = (width * height) > (3840 * 2160)
+    encoders = _available_encoders()
+
+    def has(name: str) -> bool:
+        return name in encoders
+
+    if prefer_hw:
+        # Above 4K only HEVC counts: no H.264 hardware encoder covers 8K.
+        # Below 4K, H264 hardware is preferred for compatibility and HEVC
+        # hardware is a perfectly good second choice, so both are tried
+        # before any software encoder.
+        families = (_HW_HEVC,) if big else (_HW_H264, _HW_HEVC)
+        for family in families:
+            for encoder in family:
+                if has(encoder):
+                    args = _hw_encoder_args(encoder, bitrate, big)
+                    if args:
+                        return args
+
     if bitrate is None:
-        # CRF is an encoder quality target, not a bitrate or a size promise.
-        # Software encoding gives consistent controls across supported OSes.
         if big:
             return ["-c:v", "libx265", "-preset", "fast", "-crf", "18",
                     "-tag:v", "hvc1"]
         return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18"]
-    encoders = _available_encoders()
     rate = [
         "-b:v", str(bitrate),
         "-maxrate", str(int(bitrate * 1.25)),
         "-bufsize", str(bitrate * 2),
     ]
-
-    def has(name: str) -> bool:
-        return name in encoders
-
-    if big:
-        if prefer_hw and has("hevc_videotoolbox"):
-            return ["-c:v", "hevc_videotoolbox", "-allow_sw", "1",
-                    *rate, "-tag:v", "hvc1"]
-        if has("libx265"):
-            return ["-c:v", "libx265", "-preset", "medium", *rate,
-                    "-tag:v", "hvc1"]
-    if prefer_hw and has("h264_videotoolbox"):
-        return ["-c:v", "h264_videotoolbox", "-allow_sw", "1", *rate]
+    if big and has("libx265"):
+        return ["-c:v", "libx265", "-preset", "medium", *rate, "-tag:v", "hvc1"]
     return ["-c:v", "libx264", "-preset", "medium", *rate]
 
 
@@ -203,18 +255,34 @@ def _frame_rates(info: VideoInfo, target_fps: float | None) -> tuple[float, floa
     return processing_fps, output_fps, processing_frames, output_frames
 
 
+def _is_hw(encoder_args: list[str]) -> bool:
+    return any(
+        any(hw in arg for hw in ("videotoolbox", "nvenc", "qsv", "amf"))
+        for arg in encoder_args
+    )
+
+
+def _encoder_probe_ok(encoder_args: tuple[str, ...], width: int, height: int,
+                      fps: float) -> bool:
+    try:
+        return _encoder_works(encoder_args, width, height, fps)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def _open_encoder(
     dest: Path, w: int, h: int, fps: float, bitrate: int | None,
     output_fps: float | None = None,
 ) -> subprocess.Popen:
     encoder_args = _encoder_args(w, h, bitrate)
-    if any("videotoolbox" in arg for arg in encoder_args):
-        try:
-            usable = _encoder_works(tuple(encoder_args), w, h, fps)
-        except (OSError, subprocess.TimeoutExpired):
-            usable = False
-        if not usable:
-            encoder_args = _encoder_args(w, h, bitrate, prefer_hw=False)
+    # Any hardware encoder is probed with a real one-frame run before the job
+    # relies on it. Advertised does not mean working: a driver can be present
+    # while the accelerator refuses the resolution or rate, and a mid-job
+    # encoder failure costs everything decoded up to that point.
+    if _is_hw(encoder_args) and not _encoder_probe_ok(tuple(encoder_args), w, h, fps):
+        log.warning("hardware encoder %s failed its probe; using software",
+                    encoder_args[encoder_args.index("-c:v") + 1])
+        encoder_args = _encoder_args(w, h, bitrate, prefer_hw=False)
     args = ["ffmpeg", "-v", "error", "-y",
             "-f", "rawvideo", "-pix_fmt", "rgb24",
             "-s", f"{w}x{h}", "-r", f"{fps}", "-i", "-"]
@@ -473,6 +541,11 @@ def upscale_video(
         "seconds_per_frame": round(elapsed / processed, 3) if processed else None,
         "model": spec.key, "provider": eng.provider,
         "providers": eng.active_providers,
+        "devices": (
+            eng.device_summary()
+            if hasattr(eng, "device_summary")
+            else {"mode": "single", "devices": eng.provider, "workers": 1}
+        ),
         "audio": info.has_audio, "output": str(dest),
         "source_bytes": source_bytes,
         "output_bytes": output_bytes,

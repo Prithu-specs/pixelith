@@ -6,12 +6,62 @@ from __future__ import annotations
 import argparse
 import json
 import socket
+import subprocess
 import threading
 import time
 import urllib.request
 
 from pixelith import __version__
 from pixelith.compat import summary
+from pixelith.config import OUTPUT_DIR
+
+
+class DesktopApi:
+    """JS bridge for the native window.
+
+    WKWebView (macOS) ignores anchor downloads unless the host app implements
+    the download delegate, so finished outputs are offered through this bridge
+    instead: the file is already on this machine, and the correct action is to
+    reveal it in the platform file manager.
+    """
+
+    def reveal_output(self, path: str) -> bool:
+        """Reveal a finished output in the platform file manager."""
+        import sys
+        from pathlib import Path
+
+        try:
+            target = Path(path).resolve()
+        except (OSError, ValueError):
+            return False
+        if not target.exists():
+            return False
+        # Only outputs Pixelith produced may be revealed through the bridge.
+        try:
+            target.relative_to(OUTPUT_DIR.resolve())
+        except ValueError:
+            return False
+
+        if sys.platform == "Darwin":
+            cmd = ["open", "-R", str(target)]
+        elif sys.platform == "win32":
+            cmd = ["explorer", f"/select,{target}"]
+        else:
+            cmd = ["xdg-open", str(target.parent)]
+        try:
+            subprocess.Popen(cmd)
+            return True
+        except OSError:
+            return False
+
+    def diagnostics(self) -> dict:
+        return diagnostic()
+
+
+def sys_platform() -> str:
+    import sys
+
+    return sys.platform
 
 
 def free_port(preferred: int = 8420) -> int:
@@ -69,9 +119,17 @@ def main(argv: list[str] | None = None) -> int:
         wait_until_ready(url)
         import webview
 
+        # pywebview 5.4+ hides file downloads behind this flag; without it,
+        # WKWebView and friends silently ignore the click. Harmless on older
+        # pywebview, where the JS bridge below carries the flow instead.
+        try:
+            webview.settings["ALLOW_DOWNLOADS"] = True
+        except Exception:  # noqa: BLE001 - older pywebview has no settings dict
+            pass
+
         webview.create_window(
             f"Pixelith {__version__}", url, width=1320, height=860,
-            min_size=(760, 600), text_select=True,
+            min_size=(760, 600), text_select=True, js_api=DesktopApi(),
         )
         webview.start(debug=False)
     finally:

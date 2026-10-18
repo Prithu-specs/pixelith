@@ -49,7 +49,8 @@ def filters(width: int, height: int, settings) -> str:
 
 
 def convert(src, dest, settings, work_dir, progress=None, should_cancel=None):
-    from .video import VideoError, _encoder_args, _encoder_works, probe
+    from .video import (VideoError, _encoder_args, _encoder_probe_ok, _is_hw,
+                    log, probe)
 
     info = probe(src)
     if settings.target_fps and settings.target_fps not in VIDEO_FPS_CHOICES:
@@ -65,13 +66,9 @@ def convert(src, dest, settings, work_dir, progress=None, should_cancel=None):
               if settings.video_encoding == "bounded" else None)
     bitrate = video_bitrate(info.duration, budget, info.has_audio) if budget else None
     codec = _encoder_args(w, h, bitrate)
-    if any("videotoolbox" in arg for arg in codec):
-        try:
-            usable = _encoder_works(tuple(codec), w, h, fps)
-        except (OSError, subprocess.TimeoutExpired):
-            usable = False
-        if not usable:
-            codec = _encoder_args(w, h, bitrate, prefer_hw=False)
+    if _is_hw(codec) and not _encoder_probe_ok(tuple(codec), w, h, fps):
+        log.warning("native path: hardware encoder failed its probe; using software")
+        codec = _encoder_args(w, h, bitrate, prefer_hw=False)
 
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)

@@ -412,6 +412,9 @@ select:hover { border-color: var(--text-3); }
 .check-row strong { font-size: var(--fs-sm); }
 .check-row small { color: var(--text-3); font-size: var(--fs-xs); }
 .slider-scale--four { grid-template-columns: repeat(4, 1fr); }
+.slider-scale--seven span { flex: 1; text-align: center; }
+.slider-scale--seven span:first-child { text-align: left; }
+.slider-scale--seven span:last-child { text-align: right; }
 .slider-value {
   font-size: var(--fs-sm); font-weight: 620; color: var(--accent);
   font-variant-numeric: tabular-nums;
@@ -581,6 +584,9 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--fs-sm); font-weight: 560; line-height: 1.45;
 }
 .warning .icon { width: 18px; height: 18px; margin-top: 1px; }
+.warning--action { flex-wrap: wrap; align-items: center; }
+.warning--action span { flex: 1 1 240px; }
+.warning--action .btn { flex: 0 0 auto; }
 
 /* ----------------------------------------------------------------- jobs -- */
 .jobs { list-style: none; padding: 0; display: grid; gap: var(--s-4); }

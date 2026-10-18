@@ -39,7 +39,7 @@ const API = '/api';
 const STORE_KEY = 'pixelith.settings.v1';
 const POLL_MS = 1500;
 const ASSUMED_FPS = 30;               // API contract: assume 30 when fps is unknown
-const VIDEO_FPS_OPTIONS = [24, 30, 60, 120];
+const VIDEO_FPS_OPTIONS = [24, 30, 60, 120, 144, 240];  // slider stops after Source
 const TERMINAL = new Set(['done', 'error', 'cancelled']);
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif', 'bmp', 'tif', 'tiff'];
@@ -102,8 +102,6 @@ const el = {
   videoProcessing: $('#video-processing'),
   videoEncoding: $('#video-encoding'),
   videoFpsWrap: $('#video-fps-wrap'),
-  videoFpsConvert: $('#video-fps-convert'),
-  videoFpsControls: $('#video-fps-controls'),
   videoFps:     $('#video-fps'),
   videoFpsOut:  $('#video-fps-out'),
   denoise:      $('#denoise'),
@@ -278,11 +276,23 @@ function setHealth(health) {
   const active = health.active && Object.values(health.active)[0];
   if (active) bits.push(String(active).replace('ExecutionProvider', ''));
   if (health.ffmpeg === false) bits.push('no ffmpeg');
+  // A CPU-only install is THE slowness bug; name it in the UI, not the logs.
+  const providers = health.providers || [];
+  const onCpuOnly = active === 'CPUExecutionProvider'
+    && providers.some((p) => p !== 'CPUExecutionProvider'
+      && p !== 'AzureExecutionProvider');
+  if (onCpuOnly) {
+    bits.push('using CPU only - GPU build of ONNX Runtime not installed');
+    el.healthPill.className = 'pill pill--warn';
+    el.healthPill.title = 'A hardware-aware ONNX Runtime build is not installed. '
+      + 'Install onnxruntime-directml (Windows), onnxruntime-gpu (Linux) or the '
+      + 'default wheel (macOS) to run on your graphics hardware.';
+  }
   setText(el.healthText, bits.join(' · '));
-  el.healthPill.title = health.ffmpeg === false
+  el.healthPill.title = onCpuOnly ? el.healthPill.title : (health.ffmpeg === false
     ? 'FFmpeg was not found — video jobs are unavailable.'
-    : 'Server reachable';
-  if (health.ffmpeg === false) el.healthPill.className = 'pill pill--warn';
+    : 'Server reachable');
+  if (health.ffmpeg === false && !onCpuOnly) el.healthPill.className = 'pill pill--warn';
 }
 
 /* -------------------------------------------------------------------------- *
@@ -367,8 +377,7 @@ function readSettings() {
     aspectMode: el.aspectMode.value,
     videoProcessing: el.videoProcessing.value,
     videoEncoding: el.videoEncoding.value,
-    convertFps: el.videoFpsConvert.checked,
-    videoFps: selectedVideoFps(),
+    videoFpsStop: Number(el.videoFps.value),   // 0 = Source (never change)
     denoise: parseFloat(el.denoise.value),
     sharpen: parseFloat(el.sharpen.value),
     imageFormat: el.imageFormat.value,
@@ -391,36 +400,33 @@ function applySettings(s) {
   if (s.aspectMode) el.aspectMode.value = s.aspectMode;
   if (['ai', 'native'].includes(s.videoProcessing)) el.videoProcessing.value = s.videoProcessing;
   if (['quality', 'bounded'].includes(s.videoEncoding)) el.videoEncoding.value = s.videoEncoding;
-  const hasSavedFps = VIDEO_FPS_OPTIONS.includes(s.videoFps);
-  el.videoFpsConvert.checked = s.convertFps === true || hasSavedFps;
-  if (hasSavedFps) el.videoFps.value = String(VIDEO_FPS_OPTIONS.indexOf(s.videoFps));
-  if (Number.isFinite(s.denoise)) el.denoise.value = clamp(s.denoise, 0, 1);
+  // Frame-rate slider: stop 0 is Source. Saved values from the old checkbox
+  // UI carried an absolute fps; older saves that name a real rate keep it.
+  const savedStop = Number.isFinite(s.videoFpsStop) && s.videoFpsStop >= 0
+    ? s.videoFpsStop : 0;
+  el.videoFps.value = String(clamp(savedStop, 0, VIDEO_FPS_OPTIONS.length));
+  syncSliderOutputs();
   if (Number.isFinite(s.sharpen)) el.sharpen.value = clamp(s.sharpen, 0, 1);
   if (s.imageFormat) el.imageFormat.value = s.imageFormat;
   if (s.videoFormat) el.videoFormat.value = s.videoFormat;
   syncSliderOutputs();
   syncTargetMode();
   syncAspectControls();
-  syncFpsControls();
 }
 
 function syncSliderOutputs() {
   setText(el.scaleOut, `${parseFloat(el.scale.value).toFixed(1)}×`);
   setText(el.denoiseOut, parseFloat(el.denoise.value).toFixed(2));
   setText(el.sharpenOut, parseFloat(el.sharpen.value).toFixed(2));
-  const fps = VIDEO_FPS_OPTIONS[Number(el.videoFps.value)];
-  setText(el.videoFpsOut, `${fps} FPS`);
+  const stop = Number(el.videoFps.value);
+  setText(el.videoFpsOut, stop === 0 ? 'Source · keep as-is' : `${VIDEO_FPS_OPTIONS[stop - 1]} FPS`);
 }
 
+/** null = keep the source frame rate (stop 0). Otherwise the chosen rate. */
 function selectedVideoFps() {
-  if (!el.videoFpsConvert.checked) return null;
-  return VIDEO_FPS_OPTIONS[Number(el.videoFps.value)] ?? null;
-}
-
-function syncFpsControls() {
-  const enabled = el.videoFpsConvert.checked;
-  el.videoFpsControls.hidden = !enabled;
-  el.videoFps.disabled = !enabled;
+  const stop = Number(el.videoFps.value);
+  if (!stop) return null;
+  return VIDEO_FPS_OPTIONS[stop - 1] ?? null;
 }
 
 function syncTargetMode() {
@@ -1015,6 +1021,13 @@ function renderEstimates(results) {
       if (d.target_video_bitrate) {
         bits.push(`adaptive video ~${(d.target_video_bitrate / 1e6).toFixed(2)} Mbps`);
       }
+      if (d.provider) {
+        const dv = d.devices || {};
+        const devicesText = dv.mode === 'hybrid'
+          ? `engine: ${dv.devices} (${dv.workers} workers)`
+          : `engine: ${String(d.provider).replace('ExecutionProvider', '')}`;
+        bits.push(devicesText);
+      }
       if (d.output_fps) {
         const source = d.source_fps && d.source_fps !== d.output_fps
           ? ` (source ${Number(d.source_fps).toFixed(2)})` : '';
@@ -1048,6 +1061,31 @@ function renderEstimates(results) {
     const span = document.createElement('span');
     span.textContent = text;
     box.appendChild(span);
+    el.estimateWarn.appendChild(box);
+  }
+
+  // Long AI job: offer the one-tap escape hatch next to the warning.
+  const longJob = results.some((res) => res.data && res.data.long_job);
+  if (longJob && el.videoProcessing.value === 'ai') {
+    const box = document.createElement('div');
+    box.className = 'warning warning--action';
+    box.appendChild(svgIcon('i-clock'));
+    const span = document.createElement('span');
+    span.textContent = 'One tap switches this job to Quick resize \u2014 same resolution, minutes instead of hours:';
+    box.appendChild(span);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn--sm';
+    btn.textContent = 'Switch to Quick resize';
+    btn.addEventListener('click', () => {
+      el.videoProcessing.value = 'native';
+      saveSettings();
+      syncFormatVisibility();
+      renderQueue();
+      scheduleEstimate();
+      toast('Switched to Quick resize. AI enhancement is off for this job.', 'success', 6000);
+    });
+    box.appendChild(btn);
     el.estimateWarn.appendChild(box);
   }
 }
@@ -1328,15 +1366,37 @@ function paintActions(view) {
   }
 
   if (job.status === 'done') {
-    const link = document.createElement('a');
-    link.className = 'btn btn--primary';
-    link.href = `${API}/jobs/${encodeURIComponent(job.id)}/download`;
-    link.setAttribute('download', job.output_name || '');
-    link.appendChild(svgIcon('i-download'));
-    link.appendChild(document.createTextNode('Download'));
-    // Long output names would blow out the button, so they live in the tooltip.
-    if (job.output_name) link.title = `Download ${job.output_name}`;
-    box.appendChild(link);
+    // Inside the packaged desktop app, WKWebView ignores anchor downloads
+    // silently — the bridge reveals the already-local file instead. Browsers
+    // keep the normal download link.
+    const outputPath = job.report && job.report.output;
+    const bridge = window.pywebview && window.pywebview.api;
+    const inDesktop = !!(bridge && typeof bridge.reveal_output === 'function');
+
+    if (inDesktop && outputPath) {
+      const reveal = button('Show in Finder', 'i-download', 'btn btn--primary');
+      reveal.addEventListener('click', async () => {
+        reveal.disabled = true;
+        try {
+          const ok = await bridge.reveal_output(outputPath);
+          if (!ok) throw new Error('The output file could not be located.');
+        } catch (err) {
+          reveal.disabled = false;
+          toast(err && err.message ? err.message : 'Revealing the file failed.', 'error');
+        }
+      });
+      box.appendChild(reveal);
+    } else {
+      const link = document.createElement('a');
+      link.className = 'btn btn--primary';
+      link.href = `${API}/jobs/${encodeURIComponent(job.id)}/download`;
+      link.setAttribute('download', job.output_name || '');
+      link.appendChild(svgIcon('i-download'));
+      link.appendChild(document.createTextNode('Download'));
+      // Long output names would blow out the button, so they live in the tooltip.
+      if (job.output_name) link.title = `Download ${job.output_name}`;
+      box.appendChild(link);
+    }
   }
 
   if (TERMINAL.has(job.status)) {
@@ -1905,11 +1965,6 @@ function wireSettings() {
   [el.scale, el.denoise, el.sharpen, el.videoFps].forEach((input) => {
     input.addEventListener('input', syncSliderOutputs);
     input.addEventListener('change', () => { saveSettings(); scheduleEstimate(); });
-  });
-  el.videoFpsConvert.addEventListener('change', () => {
-    syncFpsControls();
-    saveSettings();
-    scheduleEstimate();
   });
 
   // input fires while dragging so the readout tracks the thumb; change commits.

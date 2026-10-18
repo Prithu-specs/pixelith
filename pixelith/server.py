@@ -25,7 +25,8 @@ from .compression import OutputTooLarge, output_budget, video_bitrate
 from .config import (ASPECT_MODES, ASPECT_RATIOS, MODELS, PRESETS,
                      VIDEO_FPS_CHOICES, WORK_DIR, UpscaleSettings)
 from .engine import available_providers, choose_providers
-from .hardware import describe as describe_hardware
+from .hardware import auxiliary_providers, describe as describe_hardware
+from .hardware import describe_hybrid
 from . import licensing, preview as preview_mod
 from .compat import resource_root, summary as platform_summary
 from .jobs import IMAGE_SUFFIXES, VIDEO_SUFFIXES, MANAGER, classify
@@ -150,7 +151,7 @@ def health() -> dict:
         "version": __version__,
         "providers": available,
         "hardware": describe_hardware(available),
-        "heterogeneous": True,
+        "heterogeneous": describe_hybrid(available),
         "ffmpeg": have_ffmpeg(),
         "active": {k: choose_providers(spec=s)[0] for k, s in MODELS.items()},
         # Published so clients can reject a file before spending an upload on it.
@@ -247,6 +248,39 @@ def estimate(req: EstimateRequest) -> dict:
 
     native = req.kind == "video" and req.video_processing == "native"
     warnings = [warning] if warning and not native else []
+
+    # Machine truth in every estimate: which providers are real, which one the
+    # job would use, and an explicit warning when a CPU-only wheel means the
+    # job will crawl on a machine that actually has a graphics accelerator.
+    provider_plan = [choose_providers(spec=s)[0] for s in [spec]]
+    engine_provider = provider_plan[0]
+    provider_list = available_providers()
+    devices = describe_hybrid(provider_list)
+    hardware_present = any(
+        p not in ("CPUExecutionProvider", "AzureExecutionProvider")
+        for p in provider_list
+    )
+    if hardware_present and engine_provider == "CPUExecutionProvider":
+        warnings.append(
+            "This install is using the CPU only even though graphics hardware "
+            "is present. Install a GPU build of ONNX Runtime to fix it: "
+            "pip install onnxruntime-directml (Windows), onnxruntime-gpu "
+            "(Linux) or onnxruntime (macOS)."
+        )
+
+    # Long-job triage: when the AI pass crosses half an hour, ship the
+    # Quick-resize alternative in the payload so the interface can offer a
+    # one-tap switch instead of a warning the user has to decode alone.
+    long_job = (
+        req.kind == "video"
+        and req.video_processing == "ai"
+        and seconds > 1800
+    )
+    if long_job:
+        warnings.append(
+            "For a video this long, Quick resize reaches the same resolution "
+            "in minutes - AI detail recovery is the slow part."
+        )
     if req.kind == "video" and req.video_encoding == "quality":
         budget_bytes = None
         target_video_bitrate = None
@@ -267,6 +301,10 @@ def estimate(req: EstimateRequest) -> dict:
         "passes": 0 if native else p.passes,
         "seconds": None if native else round(seconds, 1),
         "human": "Time measured while encoding" if native else human_time(seconds),
+        "provider": engine_provider,
+        "providers_available": provider_list,
+        "devices": devices,
+        "long_job": long_job,
         "warning": " ".join(warnings) or None,
         "size_budget_bytes": budget_bytes,
         "max_size_ratio": (

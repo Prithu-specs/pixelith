@@ -1,3 +1,13 @@
+# GPU-first installs: prefer a hardware build of ONNX Runtime. The plain wheel
+# is CPU-only everywhere, which turns long video into a days-long job.
+#
+#   Windows:  pip install onnxruntime-directml   (any DX12 GPU / iGPU)
+#   Linux:    pip install onnxruntime-gpu        (CUDA 12; ROCm users:
+#   macOS:    pip install onnxruntime            (CoreML EP is in the base wheel)
+#             rocm.ai ships onnxruntime-rocm)
+#
+# This file stays single-wheel for a guaranteed baseline; the engine picks up
+# whichever hardware providers the installed build actually exposes.
 onnxruntime>=1.17
 numpy>=1.24
 pillow>=10.0

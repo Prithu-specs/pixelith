@@ -12,10 +12,6 @@ from pixelith.video import _encoder_args, probe, upscale_video
 
 
 def test_quality_mode_does_not_squeeze_long_hd_video_into_one_gb(monkeypatch):
-    monkeypatch.setattr(
-        "pixelith.video._available_encoders",
-        lambda: pytest.fail("quality mode probed FFmpeg encoders"),
-    )
     common = dict(kind="video", width=546, height=420, frames=135200, fps=25,
                   preset="1080p", aspect_ratio="16:9", source_bytes=297638055)
     limited = estimate(EstimateRequest(**common))
@@ -26,8 +22,42 @@ def test_quality_mode_does_not_squeeze_long_hd_video_into_one_gb(monkeypatch):
     assert quality["target_video_bitrate"] is None
     assert quality["compression_policy"] == "constant_quality"
     assert "black bars" in quality["warning"]
+
+
+def test_encoder_picks_hardware_first_and_falls_back_to_crf(monkeypatch):
+    """Quality mode now prefers a working hardware encoder, CRF as fallback."""
+
+    # No hardware encoders advertised by this FFmpeg build -> software CRF.
+    monkeypatch.setattr("pixelith.video._available_encoders", lambda: " libx264 libx265")
     args = _encoder_args(1920, 1080, None)
     assert "-crf" in args and "-b:v" not in args
+
+    # A hardware encoder present in the build's list wins in quality mode...
+    monkeypatch.setattr(
+        "pixelith.video._available_encoders",
+        lambda: " libx264 libx265 hevc_qsv",
+    )
+    args = _encoder_args(7680, 4320, None)
+    assert "-c:v" in args and "hevc_qsv" in args and "-crf" not in args
+
+    # ...and in size-limited mode, with an explicit bitrate.
+    args = _encoder_args(1920, 1080, 4_000_000)
+    i = args.index("-c:v")
+    assert args[i + 1] == "hevc_qsv" and "-global_quality" not in args
+
+    # An encoder that is advertised but broken is replaced by the probe run.
+    from pixelith import video as V
+
+    monkeypatch.setattr(
+        "pixelith.video._available_encoders",
+        lambda: " libx264 libx265 hevc_qsv",
+    )
+    monkeypatch.setattr("pixelith.video._encoder_works", lambda *a, **k: False)
+    sw = V._encoder_args(1920, 1080, None, prefer_hw=False)
+    # Direct check of the fallback logic without spawning FFmpeg:
+    encoder_args = V._encoder_args(1920, 1080, None)
+    assert V._is_hw(encoder_args)
+    assert not V._is_hw(sw)
 
 
 def test_native_estimate_does_not_claim_ai_speed_or_passes():

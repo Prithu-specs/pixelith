@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .compat import total_ram_bytes
+
 
 @dataclass(frozen=True)
 class ProviderProfile:
@@ -99,6 +101,24 @@ def describe(available: list[str]) -> list[dict]:
     ]
 
 
+def describe_hybrid(available: list[str]) -> dict:
+    """Whether this install co-runs CPU beside its best hardware provider."""
+    hardware = [
+        p for p in available
+        if profile(p).kind in ("gpu", "npu", "heterogeneous")
+    ]
+    if not hardware:
+        return {"co_execution": False, "devices": ["CPU"], "reason": "no hardware provider"}
+    primary = hardware[0]
+    extra = auxiliary_providers(primary, available)
+    devices = [primary, *extra]
+    return {
+        "co_execution": len(extra) > 0,
+        "devices": devices,
+        "reason": None if extra else f"{primary} manages its processors exclusively",
+    }
+
+
 def auxiliary_providers(primary: str, ranked: list[str]) -> list[str]:
     """Independent workers worth trying alongside ``primary``.
 
@@ -106,8 +126,32 @@ def auxiliary_providers(primary: str, ranked: list[str]) -> list[str]:
     discrete GPU/NPU providers, a separate CPU session can consume otherwise
     idle tiles. Dynamic scheduling in :mod:`pixelith.engine` ensures the faster
     worker naturally takes more of the queue.
+
+    Apple silicon is the exception to the managed rule, by explicit product
+    decision: users asked for CPU and GPU to work the same job together. Core
+    ML with ``MLComputeUnits: ALL`` spends most of the network on the GPU and
+    the Neural Engine, leaving the CPU cores mostly idle, so one plain-CPU
+    session runs beside it and the row scheduler feeds whichever worker is
+    free first. Disable with ``PIXELITH_NO_HYBRID=1`` if a machine shows
+    memory-bandwidth contention.
     """
+    import os
+    import sys
+
+    if os.environ.get("PIXELITH_NO_HYBRID"):
+        return []
+
     if profile(primary).managed_heterogeneous:
+        # CoreML on macOS: add a CPU co-worker (see above). NNAPI and
+        # OpenVINO AUTO keep the exclusive-treatment rule.
+        if (
+            primary == "CoreMLExecutionProvider"
+            and sys.platform == "darwin"
+            and total_ram_bytes() >= 8 * 1024**3
+        ):
+            for name in ranked:
+                if name != primary and profile(name).kind == "cpu":
+                    return [name]
         return []
 
     result: list[str] = []

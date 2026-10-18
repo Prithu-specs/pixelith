@@ -164,3 +164,15 @@ def pick_tile_for_cache(spec: ModelSpec, provider: str) -> int:
     from .engine import pick_tile
 
     return pick_tile(provider, spec)
+
+
+def timed_seconds(model_key: str) -> dict[str, float]:
+    """Provider -> measured seconds from this machine's cached calibration."""
+    entry = _load().get(f"{_machine_key()}:{model_key}")
+    if isinstance(entry, dict) and isinstance(entry.get("seconds"), dict):
+        return {
+            k: float(v)
+            for k, v in entry["seconds"].items()
+            if isinstance(v, (int, float))
+        }
+    return {}
